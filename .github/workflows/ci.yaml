@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build, Push, Scan and Sign Docker Image
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -16,17 +15,27 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write 
+      id-token: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Log in to the Container registry
-      uses: docker/login-action@v2
+    - name: Set version
+      run: echo "VERSION=$(cat ${GITHUB_EVENT_PATH} | jq -r '.release.tag_name')" >> $GITHUB_ENV
+      if: github.event_name == 'release'
+
+    - name: Set short SHA
+      run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
       with:
-        registry: ${{ env.REGISTRY }}
+        registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
 
     - name: Extract metadata (tags, labels) for Docker
       id: meta
@@ -38,20 +47,55 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
+        push: false 
         labels: ${{ steps.meta.outputs.labels }}
+        tags: |
+          ${{ steps.meta.outputs.tags }}
+          ghcr.io/${{ github.repository }}/kindle-weather:latest
+          ghcr.io/${{ github.repository }}/kindle-weather:env.SHA_SHORT }}
 
-    # - name: Update Kubernetes manifests
-    #   if: github.event_name != 'pull_request'
-    #   run: |
-    #     sed -i 's|image: .*|image: ${{ steps.meta.outputs.tags }}|' k8s-manifests.yaml
-    #
-    # - name: Commit and push updated manifests
-    #   if: github.event_name != 'pull_request'
-    #   run: |
-    #     git config --global user.name 'GitHub Actions'
-    #     git config --global user.email 'actions@github.com'
-    #     git add k8s-manifests.yaml
-    #     git commit -m "Update image tag in Kubernetes manifests" || echo "No changes to commit"
-    #     git push
+    - name: Scan it
+      uses: anchore/scan-action@v4
+      id: scan
+      with:
+        image: "ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}"
+        fail-build: false
+
+    - name: Upload the container scan report
+      id: upload
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif }}
+        wait-for-processing: true
+
+    - name: Generate that SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: "ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}"
+        artifact-name: "kindle-weather-${{ matrix.arch }}-${{ env.SHA_SHORT }}.sbom"
+
+    - name: Get image digest
+      run: |
+        echo "IMAGE_DIGEST=$(docker inspect \
+        ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }} | \
+        jq -r '.[0].Id')" >> $GITHUB_ENV
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@main
+
+    - name: Log in to GHCR
+      run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Sign the published Docker image
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather@${{ env.IMAGE_DIGEST }}
+
+    - name: Push the signed image, other tags
+      run: |
+        docker push ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
+        docker push ghcr.io/${{ github.repository }}/kindle-weather:latest
+
+          
+
+
