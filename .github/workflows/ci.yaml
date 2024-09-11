@@ -34,6 +34,7 @@ jobs:
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
+      id: push
       with:
         context: .
         platforms: linux/amd64,linux/arm64
@@ -67,3 +68,10 @@ jobs:
         COSIGN_EXPERIMENTAL: "true"
       run: cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather@${{ env.IMAGE_DIGEST }}
 
+    - name: Attest
+      uses: actions/attest-build-provenance@v1
+      id: attest
+      with:
+        subject-name: ghcr.io/${{ github.repository }}/kindle-weather
+        subject-digest: ${{ steps.push.outputs.digest }}
+        push-to-registry: true
