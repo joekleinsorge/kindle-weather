@@ -1,15 +1,16 @@
-FROM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest AS builder
+ARG TARGETARCH
 WORKDIR /app
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -installsuffix cgo -o kindle-weather .
 
-FROM alpine:latest  
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+FROM cgr.dev/chainguard/static:latest
+WORKDIR /app
 COPY --from=builder /app/kindle-weather .
 COPY css/ ./css/
 COPY font/ ./font/
 EXPOSE 8080
-CMD ["./kindle-weather"]
+USER nonroot
+ENTRYPOINT ["./kindle-weather"]
