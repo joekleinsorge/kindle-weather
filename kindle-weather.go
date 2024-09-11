@@ -3,14 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
-	"os"
-	"html/template"
 	"net/http"
+	"os"
+	"path/filepath"
+  "html/template"
+	"strconv"
 	"time"
 	"math"
-	"io/ioutil"
-	"path/filepath"
+
+	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -22,6 +25,7 @@ const (
 var (
 	weatherAPIURL string
 	noaaAPIURL    string
+	weatherCache  *cache.Cache
 )
 
 type WeatherData struct {
@@ -114,19 +118,26 @@ type logEntry struct {
 }
 
 func init() {
+	// Initialize API URLs
 	openWeatherAPIKey, err := readSecret("openweather-api-key")
 	if err != nil {
 		log.Fatalf("Failed to read OpenWeather API key: %v", err)
 	}
 	weatherAPIURL = fmt.Sprintf(weatherAPIURLTemplate, openWeatherAPIKey)
-
-	// tidesAPIKey, err := readSecret("tides-api-key")
-	// if err != nil {
-	//     log.Fatalf("Failed to read Tides API key: %v", err)
-	// }
-	// noaaAPIURL = fmt.Sprintf(noaaAPIURLTemplate, tidesAPIKey)
-
 	noaaAPIURL = noaaAPIURLTemplate
+
+	// Initialize cache
+	cacheExpiration, _ := strconv.Atoi(os.Getenv("CACHE_EXPIRATION"))
+	if cacheExpiration == 0 {
+		cacheExpiration = 1800 // default to 30 minutes
+	}
+
+	cacheCleanupInterval, _ := strconv.Atoi(os.Getenv("CACHE_CLEANUP_INTERVAL"))
+	if cacheCleanupInterval == 0 {
+		cacheCleanupInterval = 3600 // default to 1 hour
+	}
+
+	weatherCache = cache.New(time.Duration(cacheExpiration)*time.Second, time.Duration(cacheCleanupInterval)*time.Second)
 }
 
 func readSecret(secretName string) (string, error) {
@@ -138,6 +149,45 @@ func readSecret(secretName string) (string, error) {
 	return string(secretValue), nil
 }
 
+func getWeatherWithCache() (WeatherData, error) {
+	// Check if weather data is in cache
+	if cachedData, found := weatherCache.Get("weather"); found {
+		return cachedData.(WeatherData), nil
+	}
+
+	// If not in cache, fetch from API
+	data, err := fetchWeatherFromAPI()
+	if err != nil {
+		return WeatherData{}, err
+	}
+
+	// Store in cache
+	weatherCache.Set("weather", data, cache.DefaultExpiration)
+
+	return data, nil
+}
+
+func fetchWeatherFromAPI() (WeatherData, error) {
+	resp, err := http.Get(weatherAPIURL)
+	if err != nil {
+		return WeatherData{}, &APIError{URL: weatherAPIURL, Operation: "GET weather data", Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return WeatherData{}, &APIError{URL: weatherAPIURL, Operation: "GET weather data", Err: fmt.Errorf("status code %d", resp.StatusCode)}
+	}
+
+	var data WeatherData
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return WeatherData{}, &APIError{URL: weatherAPIURL, Operation: "decode weather data", Err: err}
+	}
+
+	roundWeatherData(&data)
+	formatWeatherTimes(&data)
+
+	return data, nil
+}
 
 func logJSON(entry logEntry) {
 	jsonEntry, err := json.Marshal(entry)
@@ -228,11 +278,11 @@ func roundWeatherData(data *WeatherData) {
 }
 
 func formatWeatherTimes(data *WeatherData) {
-	data.Current.SunriseFormatted = unixToLocalTime(data.Current.Sunrise)
-	data.Current.SunsetFormatted = unixToLocalTime(data.Current.Sunset)
+	data.Current.SunriseFormatted = unixToESTTime(data.Current.Sunrise)
+	data.Current.SunsetFormatted = unixToESTTime(data.Current.Sunset)
 
 	for i := range data.Hourly {
-		data.Hourly[i].DtFormatted = unixToLocalTime(data.Hourly[i].Dt)
+		data.Hourly[i].DtFormatted = unixToESTTime(data.Hourly[i].Dt)
 	}
 }
 
@@ -314,8 +364,9 @@ func processTideData(rawData struct {
 	return tideData, nil
 }
 
-func unixToLocalTime(unixTime int64) string {
-	return time.Unix(unixTime, 0).Format("3:04 PM")
+func unixToESTTime(unixTime int64) string {
+    est := time.FixedZone("EST", -5*60*60) // EST is UTC-5
+    return time.Unix(unixTime, 0).In(est).Format("3:04 PM")
 }
 
 func getIconClassName(icon string, id int) string {
@@ -351,7 +402,7 @@ func getMoonPhaseIcon(moonPhase float64) string {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	weather, err := getWeather()
+	weather, err := getWeatherWithCache()
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -378,9 +429,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	tmpl := template.Must(template.New("index").Funcs(template.FuncMap{
 		"getIconClassName": getIconClassName,
-		"formatTime": func(t int64) string {
-			return time.Unix(t, 0).Format("3PM")
-		},
 		"add": func(a, b int) int {
 			return a + b
 		},
