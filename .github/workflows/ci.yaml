@@ -36,7 +36,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-
     - name: Extract metadata (tags, labels) for Docker
       id: meta
       uses: docker/metadata-action@v5
@@ -50,9 +49,8 @@ jobs:
         push: false 
         labels: ${{ steps.meta.outputs.labels }}
         tags: |
-          ${{ steps.meta.outputs.tags }}
           ghcr.io/${{ github.repository }}/kindle-weather:latest
-          ghcr.io/${{ github.repository }}/kindle-weather:env.SHA_SHORT }}
+          ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
 
     - name: Scan it
       uses: anchore/scan-action@v4

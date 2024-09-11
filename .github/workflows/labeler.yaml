@@ -1,3 +1,0 @@
-# Add 'documentation' label to any change to a markdown file or anything in the docs folder.
-documentation:
-  - any: ["**/*.md", "docs/**"]
