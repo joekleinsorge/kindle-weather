@@ -63,10 +63,12 @@ jobs:
       env:
         COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
-        cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather:latest
-
-    - name: Verify the signed image
-      run: |
-        cosign verify ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
-        cosign verify ghcr.io/${{ github.repository }}/kindle-weather:latest
+        cosign sign -y \
+          --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+          --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
+        
+        cosign sign -y \
+          --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+          --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          ghcr.io/${{ github.repository }}/kindle-weather:latest
