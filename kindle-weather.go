@@ -29,9 +29,11 @@ var (
 )
 
 type WeatherData struct {
-	Current CurrentWeather `json:"current"`
+	Current CurrentWeather  `json:"current"`
 	Hourly  []HourlyWeather `json:"hourly"`
-	Daily   []DailyWeather `json:"daily"`
+	Daily   []DailyWeather  `json:"daily"`
+	Timezone        string  `json:"timezone"`
+	TimezoneOffset  int     `json:"timezone_offset"`
 }
 
 type CurrentWeather struct {
@@ -277,12 +279,21 @@ func roundWeatherData(data *WeatherData) {
 	}
 }
 
+func (w *WeatherData) convertTime(unixTime int64) string {
+	loc, err := time.LoadLocation(w.Timezone)
+	if err != nil {
+		// Fallback to using the offset if loading the location fails
+		loc = time.FixedZone(w.Timezone, w.TimezoneOffset)
+	}
+	return time.Unix(unixTime, 0).In(loc).Format("3:04 PM")
+}
+
 func formatWeatherTimes(data *WeatherData) {
-	data.Current.SunriseFormatted = unixToESTTime(data.Current.Sunrise)
-	data.Current.SunsetFormatted = unixToESTTime(data.Current.Sunset)
+	data.Current.SunriseFormatted = data.convertTime(data.Current.Sunrise)
+	data.Current.SunsetFormatted = data.convertTime(data.Current.Sunset)
 
 	for i := range data.Hourly {
-		data.Hourly[i].DtFormatted = unixToESTTime(data.Hourly[i].Dt)
+		data.Hourly[i].DtFormatted = data.convertTime(data.Hourly[i].Dt)
 	}
 }
 
@@ -309,7 +320,6 @@ func getForecastHours(hourly []HourlyWeather) []HourlyWeather {
             result = append(result, closestHour)
         }
     }
-
     return result
 }
 
@@ -362,11 +372,6 @@ func processTideData(rawData struct {
 		})
 	}
 	return tideData, nil
-}
-
-func unixToESTTime(unixTime int64) string {
-    est := time.FixedZone("EST", -5*60*60) // EST is UTC-5
-    return time.Unix(unixTime, 0).In(est).Format("3:04 PM")
 }
 
 func getIconClassName(icon string, id int) string {
@@ -485,7 +490,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
         <!-- Moonphase Icon -->
         <div id="moon">
-              <i class="{{ .MoonPhaseIcon }}"></i>
+            <i class="{{ .MoonPhaseIcon }}"></i>
         </div>
 
         <!-- Sunrise and Sunset Times -->
