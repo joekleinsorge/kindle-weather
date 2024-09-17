@@ -1,9 +1,7 @@
 name: Build, Push, Scan and Sign Docker Image
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ development ]
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
