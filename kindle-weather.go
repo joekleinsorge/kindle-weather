@@ -3,23 +3,25 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-  "html/template"
 	"strconv"
 	"time"
-	"math"
 
 	"github.com/patrickmn/go-cache"
 )
 
 const (
-	secretMountPath = "/etc/secrets"
+	secretMountPath       = "/etc/secrets"
 	weatherAPIURLTemplate = "https://api.openweathermap.org/data/3.0/onecall?lat=29.65&lon=-81.20&exclude=minutely&appid=%s&units=imperial"
-	noaaAPIURLTemplate = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=NOS.COOPS.TAC.WL&datum=MLLW&station=8720218&time_zone=lst_ldt&units=english&interval=hilo&format=json&date=today"
+	noaaAPIURLTemplate    = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=NOS.COOPS.TAC.WL&datum=MLLW&station=8720218&time_zone=lst_ldt&units=english&interval=hilo&format=json&date=today"
+	spacedevsAPIURL       = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?location__ids=27&format=json"
 )
 
 var (
@@ -29,57 +31,57 @@ var (
 )
 
 type WeatherData struct {
-	Current CurrentWeather  `json:"current"`
-	Hourly  []HourlyWeather `json:"hourly"`
-	Daily   []DailyWeather  `json:"daily"`
-	Timezone        string  `json:"timezone"`
-	TimezoneOffset  int     `json:"timezone_offset"`
+	Current        CurrentWeather  `json:"current"`
+	Hourly         []HourlyWeather `json:"hourly"`
+	Daily          []DailyWeather  `json:"daily"`
+	Timezone       string          `json:"timezone"`
+	TimezoneOffset int             `json:"timezone_offset"`
 }
 
 type CurrentWeather struct {
-	Dt        int64   `json:"dt"`
-	Sunrise   int64   `json:"sunrise"`
-	Sunset    int64   `json:"sunset"`
-	Temp      float64 `json:"temp"`
-	FeelsLike float64 `json:"feels_like"`
-	Pressure  int     `json:"pressure"`
-	Humidity  int     `json:"humidity"`
-	DewPoint  float64 `json:"dew_point"`
-	Uvi       float64 `json:"uvi"`
-	Clouds    float64 `json:"clouds"`
-	Visibility int    `json:"visibility"`
-	WindSpeed float64 `json:"wind_speed"`
-	WindDeg   int     `json:"wind_deg"`
-	WindGust  float64 `json:"wind_gust"`
-	Weather   []WeatherCondition `json:"weather"`
+	Dt               int64              `json:"dt"`
+	Sunrise          int64              `json:"sunrise"`
+	Sunset           int64              `json:"sunset"`
+	Temp             float64            `json:"temp"`
+	FeelsLike        float64            `json:"feels_like"`
+	Pressure         int                `json:"pressure"`
+	Humidity         int                `json:"humidity"`
+	DewPoint         float64            `json:"dew_point"`
+	Uvi              float64            `json:"uvi"`
+	Clouds           float64            `json:"clouds"`
+	Visibility       int                `json:"visibility"`
+	WindSpeed        float64            `json:"wind_speed"`
+	WindDeg          int                `json:"wind_deg"`
+	WindGust         float64            `json:"wind_gust"`
+	Weather          []WeatherCondition `json:"weather"`
 	SunriseFormatted string
 	SunsetFormatted  string
 }
 
 type HourlyWeather struct {
-	Dt           int64   `json:"dt"`
-	DtFormatted  string  `json:"-"`
-	Temp         float64 `json:"temp"`
-	FeelsLike    float64 `json:"feels_like"`
-	Pressure     int     `json:"pressure"`
-	Humidity     int     `json:"humidity"`
-	DewPoint     float64 `json:"dew_point"`
-	Uvi          float64 `json:"uvi"`
-	Clouds       float64 `json:"clouds"`
-	Visibility   int     `json:"visibility"`
-	WindSpeed    float64 `json:"wind_speed"`
-	WindGust     float64 `json:"wind_gust"`
-	WindDeg      int     `json:"wind_deg"`
-	Weather      []WeatherCondition `json:"weather"`
-	Pop          float64 `json:"pop"`
-	Rain         Rain    `json:"rain"`
+	Dt          int64              `json:"dt"`
+	DtFormatted string             `json:"-"`
+	Temp        float64            `json:"temp"`
+	FeelsLike   float64            `json:"feels_like"`
+	Pressure    int                `json:"pressure"`
+	Humidity    int                `json:"humidity"`
+	DewPoint    float64            `json:"dew_point"`
+	Uvi         float64            `json:"uvi"`
+	Clouds      float64            `json:"clouds"`
+	Visibility  int                `json:"visibility"`
+	WindSpeed   float64            `json:"wind_speed"`
+	WindGust    float64            `json:"wind_gust"`
+	WindDeg     int                `json:"wind_deg"`
+	Weather     []WeatherCondition `json:"weather"`
+	Pop         float64            `json:"pop"`
+	Rain        Rain               `json:"rain"`
 }
 
 type DailyWeather struct {
 	Moonrise  int64   `json:"moonrise"`
 	Moonset   int64   `json:"moonset"`
 	MoonPhase float64 `json:"moon_phase"`
-  Summary   string  `json:"summary"`
+	Summary   string  `json:"summary"`
 }
 
 type WeatherCondition struct {
@@ -106,6 +108,12 @@ type APIError struct {
 	URL       string
 	Operation string
 	Err       error
+}
+
+type LaunchData struct {
+	WindowStart string `json:"window_start"`
+	WindowEnd   string `json:"window_end"`
+  Name        string `json:"name"`
 }
 
 type logEntry struct {
@@ -189,6 +197,89 @@ func fetchWeatherFromAPI() (WeatherData, error) {
 	formatWeatherTimes(&data)
 
 	return data, nil
+}
+
+func ConvertToETTime(timestamp string) (string, error) {
+	// Parse the timestamp into a time.Time object
+	parsedTime, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse time: %w", err)
+	}
+
+	// Load the Eastern Time location
+	etLocation, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return "", fmt.Errorf("failed to load location: %w", err)
+	}
+
+	// Convert the time to Eastern Time
+	etTime := parsedTime.In(etLocation)
+
+	// Format the time as 4:04pm
+	return etTime.Format("3:04pm"), nil
+}
+
+func buildTodayLaunchURL() (string, error) {
+	baseURL, err := url.Parse(spacedevsAPIBaseURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	query := url.Values{}
+
+	now := time.Now().UTC()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour).Add(-time.Second)
+
+	query.Set("net__gte", start.Format(time.RFC3339))
+	query.Set("net__lt", end.Format(time.RFC3339))
+
+	baseURL.RawQuery = query.Encode()
+	return baseURL.String(), nil
+}
+
+func getUpcomingLaunches() ([]LaunchData, error) {
+	apiURL, err := buildTodayLaunchURL()
+	if err != nil {
+		return nil, fmt.Errorf("error building API URL: %w", err)
+	}
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return nil, &APIError{URL: apiURL, Operation: "GET launch data", Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, &APIError{URL: apiURL, Operation: "GET launch data", Err: fmt.Errorf("status code %d", resp.StatusCode)}
+	}
+
+	var data struct {
+		Results []LaunchData `json:"results"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, &APIError{URL: apiURL, Operation: "decode launch data", Err: err}
+	}
+
+	// Convert timestamps to ET
+	for i, launch := range data.Results {
+		if launch.WindowStart != "" {
+			data.Results[i].WindowStart, err = ConvertToETTime(launch.WindowStart)
+			if err != nil {
+				log.Printf("Failed to convert window_start for launch: %s", launch.Name)
+			}
+		}
+
+		if launch.WindowEnd != "" {
+			data.Results[i].WindowEnd, err = ConvertToETTime(launch.WindowEnd)
+			if err != nil {
+				log.Printf("Failed to convert window_end for launch: %s", launch.Name)
+			}
+		}
+	}
+
+	return data.Results, nil
 }
 
 func logJSON(entry logEntry) {
@@ -298,31 +389,30 @@ func formatWeatherTimes(data *WeatherData) {
 }
 
 func getForecastHours(hourly []HourlyWeather) []HourlyWeather {
-    var result []HourlyWeather
-    now := time.Now()
-    targetHours := []int{2, 4, 6, 8}
+	var result []HourlyWeather
+	now := time.Now()
+	targetHours := []int{2, 4, 6, 8}
 
-    for _, targetHour := range targetHours {
-        targetTime := now.Add(time.Duration(targetHour) * time.Hour)
-        var closestHour HourlyWeather
-        smallestDiff := time.Duration(math.MaxInt64)
+	for _, targetHour := range targetHours {
+		targetTime := now.Add(time.Duration(targetHour) * time.Hour)
+		var closestHour HourlyWeather
+		smallestDiff := time.Duration(math.MaxInt64)
 
-        for _, h := range hourly {
-            forecastTime := time.Unix(h.Dt, 0)
-            diff := forecastTime.Sub(targetTime).Abs()
-            if diff < smallestDiff {
-                smallestDiff = diff
-                closestHour = h
-            }
-        }
+		for _, h := range hourly {
+			forecastTime := time.Unix(h.Dt, 0)
+			diff := forecastTime.Sub(targetTime).Abs()
+			if diff < smallestDiff {
+				smallestDiff = diff
+				closestHour = h
+			}
+		}
 
-        if closestHour.Dt != 0 {  // Check if a valid hour was found
-            result = append(result, closestHour)
-        }
-    }
-    return result
+		if closestHour.Dt != 0 { // Check if a valid hour was found
+			result = append(result, closestHour)
+		}
+	}
+	return result
 }
-
 
 func getTide() (TideData, error) {
 	resp, err := http.Get(noaaAPIURL)
@@ -429,8 +519,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-  forecastHours := getForecastHours(weather.Hourly)
-  moonPhaseIcon := getMoonPhaseIcon(weather.Daily[0].MoonPhase)
+	forecastHours := getForecastHours(weather.Hourly)
+	moonPhaseIcon := getMoonPhaseIcon(weather.Daily[0].MoonPhase)
 
 	tmpl := template.Must(template.New("index").Funcs(template.FuncMap{
 		"getIconClassName": getIconClassName,
@@ -466,6 +556,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
         <div id="description">
             <p>{{ (index .Weather.Daily 0).Summary }}</p>
         </div>
+
+        <!-- Upcoming Launches -->
+        <div id="launches">
+          <p>{{ (index .Launches 0).Name }}</p>
+          <p>{{ (index .Launches 0).WindowStart }}</p>
+        </div>
+        
         
         <!-- Hourly Forecast -->
         <div class="forecast">
@@ -503,17 +600,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 </html>
 `))
 
-    data := struct {
-        Weather       WeatherData
-        Tide          TideData
-        ForecastHours []HourlyWeather
-        MoonPhaseIcon string
-    }{weather, tide, forecastHours, moonPhaseIcon}
+	data := struct {
+		Weather       WeatherData
+		Tide          TideData
+		ForecastHours []HourlyWeather
+		MoonPhaseIcon string
+    Launches      LaunchData
+	}{weather, tide, forecastHours, moonPhaseIcon, launches}
 
-    err = tmpl.Execute(w, data)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Could not render template: %v", err), http.StatusInternalServerError)
-    }
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not render template: %v", err), http.StatusInternalServerError)
+	}
 }
 
 func main() {
