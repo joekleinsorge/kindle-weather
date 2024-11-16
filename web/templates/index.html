@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather & Tide</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <meta name="viewport"
+          content="width=758, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <link rel="stylesheet" href="/css/kindle.css">
+    <link rel="stylesheet" href="/css/weather-icons.min.css">
+    <link rel="stylesheet" href="/css/weather-icons-wind.min.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <div id="page">
+        <!-- Current Weather Icon -->
+        <div id="iconWrapper">
+            <i id="icon" class="{{ getIconClassName (index .Weather.Current.Weather 0).Icon (index .Weather.Current.Weather 0).ID }}"></i>
+        </div>
+        
+        <!-- Current Temperature -->
+        <div class="tempWrapper">
+            <div id="temp">{{ .Weather.Current.Temp }}</div>
+        </div>
+        
+        <!-- Weather Description -->
+        <div id="description">
+            <p>{{ (index .Weather.Daily 0).Summary }}</p>
+        </div>
+        
+        <!-- Hourly Forecast -->
+        <div class="forecast">
+            {{ range $index, $hour := .ForecastHours }}
+            <div class="col">
+                <div class="colTime">{{ $hour.DtFormatted }}</div>
+                <div class="forecastIconWrapper">
+                    <i class="colIcon {{ getIconClassName (index $hour.Weather 0).Icon (index $hour.Weather 0).ID }}"></i>
+                </div>
+                <div class="colTemp">{{ $hour.Temp }}</div>
+                <div class="colDesc">{{ (index $hour.Weather 0).Description }}</div>
+            </div>
+            {{ end }}
+        </div>
+        
+        <!-- Tide Data -->
+        <div class="tide-section">
+            {{ range .Tide.Predictions }}
+            <div class="tide-item"> {{ .Type }} at {{ .Time }} </div>
+            {{ end }}
+        </div>
+
+        <!-- Moonphase Icon -->
+        <div id="moon">
+            <i class="{{ .MoonPhaseIcon }}"></i>
+        </div>
+
+        <!-- Sunrise and Sunset Times -->
+        <div id="sun">
+            <i class="wi wi-sunrise"></i> {{ .Weather.Current.SunriseFormatted }}
+            <i class="wi wi-sunset"></i> {{ .Weather.Current.SunsetFormatted }}
+        </div>
+    </div>
+</body>
+</html>
+
