@@ -1,16 +1,23 @@
-FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest AS builder
-ARG TARGETARCH
-WORKDIR /app
-COPY go.mod ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -installsuffix cgo -o kindle-weather .
+# Use Node.js 20 Alpine as the base image
+FROM node:20-alpine
 
-FROM cgr.dev/chainguard/static:latest
-WORKDIR /app
-COPY --from=builder /app/kindle-weather .
-COPY css/ ./css/
-COPY font/ ./font/
-EXPOSE 8080
-USER nonroot
-ENTRYPOINT ["./kindle-weather"]
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy package.json and package-lock.json first
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the entire project
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 80
+
+# Use a lightweight web server to serve static files
+RUN npm install -g http-server
+
+# Command to run the application
+CMD ["http-server", "src", "-p", "80", "-c-1"]
