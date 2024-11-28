@@ -220,7 +220,7 @@ func ConvertToETTime(timestamp string) (string, error) {
 }
 
 func buildTodayLaunchURL() (string, error) {
-	baseURL, err := url.Parse(spacedevsAPIBaseURL)
+	baseURL, err := url.Parse(spacedevsAPIURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse base URL: %w", err)
 	}
@@ -519,6 +519,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+  launches, err := getUpcomingLaunches()
+	if err != nil {
+		logJSON(logEntry{
+			Timestamp: time.Now().Format(time.RFC3339),
+			Level:     "ERROR",
+			Message:   fmt.Sprintf("Error getting launch data: %v", err),
+		})
+		http.Error(w, "Could not get upcoming launches", http.StatusInternalServerError)
+		return
+	}
+
 	forecastHours := getForecastHours(weather.Hourly)
 	moonPhaseIcon := getMoonPhaseIcon(weather.Daily[0].MoonPhase)
 
@@ -559,8 +570,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
         <!-- Upcoming Launches -->
         <div id="launches">
-          <p>{{ (index .Launches 0).Name }}</p>
-          <p>{{ (index .Launches 0).WindowStart }}</p>
+          {{ range .Launches }}
+              <p>{{ .Name }}</p>
+              <p>{{ .WindowStart }}</p>
+          {{ end }}
         </div>
         
         
