@@ -1,23 +1,21 @@
-# Use Node.js 20 Alpine as the base image
-FROM node:20-alpine
+FROM python:3.9-slim
 
-# Set the working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy package.json and package-lock.json first
-COPY package*.json ./
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install dependencies
-RUN npm install
+# Copy application code
+COPY app/ ./app
+COPY static/ ./static
 
-# Copy the entire project
-COPY . .
+# Set environment variables
+ENV FLASK_APP=app/main.py
+ENV FLASK_RUN_HOST=0.0.0.0
 
-# Expose the port the app runs on
-EXPOSE 80
+# Expose port
+EXPOSE 5000
 
-# Use a lightweight web server to serve static files
-RUN npm install -g http-server
-
-# Command to run the application
-CMD ["http-server", "src", "-p", "80", "-c-1"]
+# Run the application
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app.main:app"]

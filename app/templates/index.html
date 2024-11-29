@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kindle Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='weather-icons.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <section class="weather">
+            <h2>Current Weather</h2>
+            {% if weather %}
+                <div class="current-weather">
+                    <i class="wi wi-owm-{{ weather.current.icon }}"></i>
+                    <p>Temperature: {{ weather.current.temp }}°C</p>
+                    <p>Conditions: {{ weather.current.description }}</p>
+                </div>
+                
+                <h3>Forecast</h3>
+                <div class="forecast">
+                {% for forecast in weather.forecast %}
+                    <div class="forecast-item">
+                        <i class="wi wi-owm-{{ forecast.icon }}"></i>
+                        <p>{{ forecast.date.strftime('%Y-%m-%d') }}: 
+                           {{ forecast.temp }}°C, {{ forecast.description }}</p>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <p>Weather data unavailable</p>
+            {% endif %}
+        </section>
+
+        <section class="tides">
+            <h2>Tide Information</h2>
+            {% if tides %}
+                <p>High Tide: {{ tides.high_tide }}</p>
+                <p>Low Tide: {{ tides.low_tide }}</p>
+            {% else %}
+                <p>Tide data unavailable</p>
+            {% endif %}
+        </section>
+
+        <section class="launches">
+            <h2>Upcoming Rocket Launches</h2>
+            {% if launches %}
+                {% for launch in launches %}
+                    <div class="launch-item">
+                        <p>{{ launch.name }}</p>
+                        <p>Date: {{ launch.date.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p>Location: {{ launch.location }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No upcoming launches</p>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

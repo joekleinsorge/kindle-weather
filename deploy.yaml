@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-keys
+type: Opaque
+stringData:
+  OPEN_WEATHER_API_KEY: your-open-weather-api-key
+  TIDE_API_KEY: your-tide-api-key
+  ROCKET_API_KEY: your-rocket-api-key
+  LOCATION_LATITUDE: "40.7128"
+  LOCATION_LONGITUDE: "-74.0060"
+  LOCATION_NAME: "New York"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kindle-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kindle-dashboard
+  template:
+    metadata:
+      labels:
+        app: kindle-dashboard
+    spec:
+      containers:
+      - name: kindle-dashboard
+        image: your-image-registry/kindle-dashboard:latest
+        envFrom:
+        - secretRef:
+            name: api-keys
+        ports:
+        - containerPort: 5000
