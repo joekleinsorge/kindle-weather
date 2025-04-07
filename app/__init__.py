@@ -11,13 +11,11 @@ def create_app():
 
     # Kubernetes Secret Environment Variable Mapping
     app.config['OPEN_WEATHER_API_KEY'] = os.environ.get('OPEN_WEATHER_API_KEY', '')
-    app.config['TIDE_API_KEY'] = os.environ.get('TIDE_API_KEY', '')
-    app.config['ROCKET_API_KEY'] = os.environ.get('ROCKET_API_KEY', '')
 
     # Location Configuration from Secrets or Defaults
     app.config['LATITUDE'] = os.environ.get('LOCATION_LATITUDE', '40.7128')
     app.config['LONGITUDE'] = os.environ.get('LOCATION_LONGITUDE', '-74.0060')
-    app.config['LOCATION_NAME'] = os.environ.get('LOCATION_NAME', 'New York')
+    app.config['LAUNCH_PAD_ID'] = os.environ.get('LAUNCH_PAD_ID', '27')
 
     # Logging
     logging.basicConfig(
@@ -28,8 +26,6 @@ def create_app():
     # Validate Critical Secrets
     critical_secrets = [
         'OPEN_WEATHER_API_KEY', 
-        'TIDE_API_KEY', 
-        'ROCKET_API_KEY'
     ]
     
     for secret in critical_secrets:

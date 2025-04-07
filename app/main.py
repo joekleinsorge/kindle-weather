@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-from api_services import APIService
+from .api_services import APIService
 import threading
 import time
 
