@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather & Tide</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <meta name="viewport"
+          content="{{if .Horizontal}}width=1024, initial-scale=1, maximum-scale=1, user-scalable=no{{else}}width=758, initial-scale=1, maximum-scale=1, user-scalable=no{{end}}">
+    <link rel="stylesheet" href="/css/kindle.css">
+    <link rel="stylesheet" href="/css/weather-icons.min.css">
+    <link rel="stylesheet" href="/css/weather-icons-wind.min.css">
+    <link rel="icon" href="data:,">
+</head>
+<body class="{{if .Horizontal}}horizontal{{end}}">
+    <div id="page">
+        <!-- Current Weather Icon -->
+        <div id="iconWrapper">
+            <i id="icon" class="{{ getIconClassName (index .Weather.Current.Weather 0).Icon (index .Weather.Current.Weather 0).ID }}"></i>
+        </div>
+        
+        <!-- Current Temperature -->
+        <div class="tempWrapper">
+            <div id="temp">{{ .Weather.Current.Temp }}</div>
+        </div>
+        
+        <!-- Weather Description -->
+        <div id="description">
+            <p>{{ (index .Weather.Daily 0).Summary }}</p>
+        </div>
+
+        <!-- Upcoming Launches -->
+        <div id="launches">
+          {{ if .KennedyLaunch }}
+              <div class="launch-highlight">
+                  <span class="rocket-icon" aria-hidden="true">
+                      <svg viewBox="0 0 32 32" focusable="false">
+                          <path d="M16 2c-3 3-4 7.5-4 10.5l4 4 4-4C20 9.5 19 5 16 2z"></path>
+                          <path d="M12 15l-6 6 3.5-.5L11 24l1 3 3-6-3-6z"></path>
+                          <path d="M20 15l3 6 1-3 3.5.5-6-6-1.5 2.5z"></path>
+                          <path d="M16 17l-3 3 3 10 3-10-3-3z"></path>
+                          <circle cx="16" cy="11" r="2"></circle>
+                      </svg>
+                  </span>
+                  <span class="launch-detail-text">
+                      <span class="launch-name">{{ .KennedyLaunch.Name }}</span>
+                      {{ if .KennedyLaunch.WindowStart }}
+                      <span class="launch-time">{{ .KennedyLaunch.WindowStart }}</span>
+                      {{ end }}
+                  </span>
+              </div>
+          {{ end }}
+          {{ range .Launches }}
+              <div class="launch-item">
+                  <span class="launch-name">{{ .Name }}</span>
+                  {{ if .WindowStart }}
+                  <span class="launch-time">{{ .WindowStart }}</span>
+                  {{ end }}
+              </div>
+          {{ end }}
+        </div>
+        
+        
+        <!-- Hourly Forecast -->
+        <div class="forecast">
+            {{ range $index, $hour := .ForecastHours }}
+            <div class="col">
+                <div class="colTime">{{ $hour.DtFormatted }}</div>
+                <div class="forecastIconWrapper">
+                    <i class="colIcon {{ getIconClassName (index $hour.Weather 0).Icon (index $hour.Weather 0).ID }}"></i>
+                </div>
+                <div class="colTemp">{{ $hour.Temp }}</div>
+                <div class="colDesc">{{ (index $hour.Weather 0).Description }}</div>
+            </div>
+            {{ end }}
+        </div>
+        
+        <!-- Tide Chart -->
+        <div class="tide-section">
+            {{ .TideSVG }}
+        </div>
+
+        <!-- Moonphase Icon -->
+        <div id="moon">
+            <i class="{{ .MoonPhaseIcon }}"></i>
+        </div>
+
+        <!-- Sunrise and Sunset Times -->
+        <div id="sun">
+            <i class="wi wi-sunrise"></i> {{ .Weather.Current.SunriseFormatted }}
+            <i class="wi wi-sunset"></i> {{ .Weather.Current.SunsetFormatted }}
+        </div>
+    </div>
+</body>
+</html>
