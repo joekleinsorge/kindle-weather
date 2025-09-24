@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+   kindle-weather:
+    image: ghcr.io/joekleinsorge/kindle-weather/kindle-weather:c06da66
+    container_name: kindle-weather
+    restart: unless-stopped
+    environment:
+      - CACHE_EXPIRATION=1800
+      - CACHE_CLEANUP_INTERVAL=3600
+    volumes:
+      - ./secrets:/etc/secrets:ro
+    ports:
+      - "8589:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
