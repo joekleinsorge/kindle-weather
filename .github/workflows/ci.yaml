@@ -13,7 +13,7 @@ jobs:
       attestations: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -68,7 +68,7 @@ jobs:
       run: cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather@${{ steps.push.outputs.digest }}
 
     - name: Attest
-      uses: actions/attest-build-provenance@v1
+      uses: actions/attest-build-provenance@v3
       id: attest
       with:
         subject-name: ghcr.io/${{ github.repository }}/kindle-weather
