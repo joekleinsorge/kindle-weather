@@ -17,7 +17,7 @@ services:
     volumes:
       - ./secrets:/etc/secrets:ro
     ports:
-      - "8080:8080"
+      - "8081:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
       interval: 60s
