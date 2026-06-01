@@ -97,11 +97,55 @@ html, body {
 
 .tide-section {
     position: absolute;
-    bottom: 10%;
+    bottom: 9%;
     width: 100%;
+    height: 95px;
     text-align: center;
-    /* font-size: 2.5vw; */
-    font-size: 1.1rem;
+}
+
+.tide-section svg {
+    width: 92%;
+    height: 95px;
+}
+
+.tide-wave {
+    position: relative;
+    width: 100%;
+    height: 40px;
+    border-top: 2px solid black;
+    margin: 20px 0;
+}
+
+.tide-time {
+    position: absolute;
+    font-size: 0.9rem;
+    transform: translateX(-50%);
+}
+
+.tide-time.high {
+    top: -25px;
+}
+
+.tide-time.low {
+    bottom: -25px;
+}
+
+.tide-time::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    height: 10px;
+    background: black;
+    transform: translateX(-50%);
+}
+
+.tide-time.high::before {
+    bottom: -12px;
+}
+
+.tide-time.low::before {
+    top: -12px;
 }
 
 .tide-item {
@@ -123,4 +167,132 @@ html, body {
     right: 3.3%;
     /* font-size: 4.3rem; */
     font-size: 2rem;
+}
+
+#launches {
+    position: absolute;
+    top: 145px;
+    right: 5%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.45rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.rocket-icon {
+    display: block;
+    width: 28px;
+    height: 28px;
+}
+
+.rocket-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #000;
+    display: block;
+}
+
+.launch-time {
+    color: #000;
+}
+
+body.horizontal #page {
+    padding: 10px 0;
+}
+
+body.horizontal #iconWrapper {
+    top: 4%;
+    left: 5%;
+}
+
+body.horizontal #icon {
+    font-size: 6rem;
+}
+
+body.horizontal .tempWrapper {
+    top: 4%;
+    right: 5%;
+}
+
+body.horizontal #temp {
+    font-size: 5.5rem;
+}
+
+body.horizontal #description {
+    top: 28%;
+    bottom: auto;
+    left: 5%;
+    right: 5%;
+    text-align: center;
+    font-size: 1.5rem;
+}
+
+body.horizontal #launches {
+    top: 34%;
+    bottom: auto;
+    left: auto;
+    right: 5%;
+    font-size: 1.2rem;
+}
+
+body.horizontal .rocket-icon {
+    width: 24px;
+    height: 24px;
+}
+
+body.horizontal .forecast {
+    top: 52%;
+    bottom: auto;
+    left: 3%;
+    right: 3%;
+    width: auto;
+    height: 28%;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+}
+
+body.horizontal .col {
+    width: 23.5%;
+}
+
+body.horizontal .forecastIconWrapper {
+    font-size: 3rem;
+}
+
+body.horizontal .colTemp {
+    font-size: 2.3rem;
+}
+
+body.horizontal .colDesc,
+body.horizontal .colTime {
+    font-size: 0.95rem;
+}
+
+body.horizontal .tide-section {
+    bottom: 13%;
+    top: auto;
+    height: 95px;
+}
+
+body.horizontal .tide-section svg {
+    width: 90%;
+    height: 95px;
+}
+
+body.horizontal .tide-section text {
+    font-size: 11px;
+}
+
+body.horizontal #moon {
+    bottom: 3%;
+    left: 5%;
+    font-size: 1.6rem;
+}
+
+body.horizontal #sun {
+    bottom: 3%;
+    right: 5%;
+    font-size: 1.6rem;
 }
