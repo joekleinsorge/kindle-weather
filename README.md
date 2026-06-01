@@ -12,6 +12,36 @@ A web application that displays weather, tide, moon phase, and space launch info
 - Upcoming space launches
 - Simple design optimized for Kindle displays
 - Caching for API responses to reduce calls
+- OpenTelemetry tracing (OTLP exporter)
+
+## OpenTelemetry
+
+Tracing is enabled when either `OTEL_EXPORTER_OTLP_ENDPOINT` or
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set.
+
+Optional environment variables:
+- `OTEL_SERVICE_NAME` (default: `kindle-weather`)
+
+Example:
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_SERVICE_NAME=kindle-weather \
+./kindle-weather
+```
+
+The Docker Compose stack includes an OpenTelemetry Collector and Jaeger for
+local tracing. Start it with `docker compose up --build`, then open Jaeger at
+`http://localhost:16686`.
+
+## Runtime Configuration
+
+Optional environment variables:
+- `AUTO_REFRESH_SECONDS` (default: `1800`)
+- `CACHE_EXPIRATION` (weather cache, default: `3600`)
+- `TIDE_CACHE_EXPIRATION` (default: `1800`)
+- `LAUNCH_CACHE_EXPIRATION` (default: `900`)
+- `LAUNCH_API_TIMEOUT_SECONDS` (default: `2`)
+- `ENABLE_ROCKET_PREVIEW` (default: disabled)
 
 ## Build
 

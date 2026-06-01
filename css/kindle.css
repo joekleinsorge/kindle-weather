@@ -97,10 +97,15 @@ html, body {
 
 .tide-section {
     position: absolute;
-    bottom: 10%;
+    bottom: 9%;
     width: 100%;
-    height: 80px;
+    height: 95px;
     text-align: center;
+}
+
+.tide-section svg {
+    width: 92%;
+    height: 95px;
 }
 
 .tide-wave {
@@ -166,22 +171,20 @@ html, body {
 
 #launches {
     position: absolute;
-    top: 220px;
-    right: 20px;
-    text-align: right;
-    font-size: 18px;
-}
-
-.launch-highlight {
-    margin-bottom: 15px;
+    top: 145px;
+    right: 5%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.45rem;
+    font-weight: bold;
+    line-height: 1;
 }
 
 .rocket-icon {
-    display: inline-block;
-    vertical-align: middle;
-    width: 34px;
-    height: 34px;
-    margin-right: 10px;
+    display: block;
+    width: 28px;
+    height: 28px;
 }
 
 .rocket-icon svg {
@@ -191,24 +194,8 @@ html, body {
     display: block;
 }
 
-.launch-detail-text {
-    display: inline-block;
-    vertical-align: middle;
-    text-align: right;
-}
-
-.launch-item {
-    margin-bottom: 10px;
-}
-
-.launch-name {
-    font-weight: bold;
-    display: block;
-}
-
 .launch-time {
-    font-size: 16px;
-    color: #444;
+    color: #000;
 }
 
 body.horizontal #page {
@@ -243,26 +230,16 @@ body.horizontal #description {
 }
 
 body.horizontal #launches {
-    top: 40%;
+    top: 34%;
     bottom: auto;
-    left: 5%;
+    left: auto;
     right: 5%;
-    text-align: center;
-    font-size: 1.1rem;
-}
-
-body.horizontal .launch-highlight {
-    display: inline-block;
+    font-size: 1.2rem;
 }
 
 body.horizontal .rocket-icon {
-    width: 28px;
-    height: 28px;
-    margin-right: 6px;
-}
-
-body.horizontal .launch-detail-text {
-    text-align: center;
+    width: 24px;
+    height: 24px;
 }
 
 body.horizontal .forecast {
@@ -294,18 +271,18 @@ body.horizontal .colTime {
 }
 
 body.horizontal .tide-section {
-    bottom: 14%;
+    bottom: 13%;
     top: auto;
-    height: 110px;
+    height: 95px;
 }
 
 body.horizontal .tide-section svg {
     width: 90%;
-    height: 110px;
+    height: 95px;
 }
 
 body.horizontal .tide-section text {
-    font-size: 10px;
+    font-size: 11px;
 }
 
 body.horizontal #moon {

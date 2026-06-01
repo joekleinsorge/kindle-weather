@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -21,6 +22,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 const (
@@ -30,12 +38,20 @@ const (
 	spacedevsAPIURL       = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?location__ids=27&format=json"
 )
 
+//go:embed templates/*.html
+var templatesFS embed.FS
+
 var (
-	weatherAPIURL string
-	noaaAPIURL    string
-	weatherCache  *cache.Cache
-	httpClient    *http.Client
-	tmpl          *template.Template
+	weatherAPIURL       string
+	noaaAPIURL          string
+	weatherCache        *cache.Cache
+	tideCache           *cache.Cache
+	launchCache         *cache.Cache
+	httpClient          *http.Client
+	launchHTTPClient    *http.Client
+	tmpl                *template.Template
+	autoRefresh         time.Duration
+	enableRocketPreview bool
 
 	httpRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "http_requests_total",
@@ -151,6 +167,15 @@ type LaunchLocation struct {
 	Name string `json:"name"`
 }
 
+type LaunchInfo struct {
+	Name      string
+	Scheduled string
+}
+
+type launchCacheEntry struct {
+	Launch *LaunchInfo
+}
+
 type logEntry struct {
 	Timestamp string `json:"timestamp"`
 	Level     string `json:"level"`
@@ -163,35 +188,52 @@ type logEntry struct {
 }
 
 func init() {
-	// Configure HTTP client with timeouts
-	httpClient = &http.Client{Timeout: 8 * time.Second}
+	httpClient = &http.Client{
+		Timeout:   8 * time.Second,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
+	launchHTTPClient = &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
+	noaaAPIURL = noaaAPIURLTemplate
+	weatherCache = cache.New(time.Hour, 2*time.Hour)
+	tideCache = cache.New(30*time.Minute, time.Hour)
+	launchCache = cache.New(15*time.Minute, time.Hour)
+	autoRefresh = 30 * time.Minute
+	enableRocketPreview = false
 
-	// Initialize API URLs
-	// Prefer env var, fallback to mounted secret file
+	var err error
+	tmpl, err = template.New("index.html").Funcs(template.FuncMap{
+		"getIconClassName": getIconClassName,
+	}).ParseFS(templatesFS, "templates/index.html")
+	if err != nil {
+		log.Fatalf("failed to parse templates: %v", err)
+	}
+}
+
+func configureRuntime() error {
 	openWeatherAPIKey := strings.TrimSpace(os.Getenv("OPENWEATHER_API_KEY"))
 	if openWeatherAPIKey == "" {
 		var err error
 		openWeatherAPIKey, err = readSecret("openweather-api-key")
 		if err != nil {
-			log.Fatalf("Failed to read OpenWeather API key: %v", err)
+			return fmt.Errorf("failed to read OpenWeather API key: %w", err)
 		}
 	}
 	weatherAPIURL = fmt.Sprintf(weatherAPIURLTemplate, openWeatherAPIKey)
 	noaaAPIURL = noaaAPIURLTemplate
 
-	// Cache configuration via env (seconds). Defaults: 1h expiration, 2h cleanup
 	exp := parseEnvDurationSeconds("CACHE_EXPIRATION", time.Hour)
 	cleanup := parseEnvDurationSeconds("CACHE_CLEANUP_INTERVAL", 2*time.Hour)
 	weatherCache = cache.New(exp, cleanup)
+	tideCache = cache.New(parseEnvDurationSeconds("TIDE_CACHE_EXPIRATION", 30*time.Minute), cleanup)
+	launchCache = cache.New(parseEnvDurationSeconds("LAUNCH_CACHE_EXPIRATION", 15*time.Minute), cleanup)
+	autoRefresh = parseEnvDurationSeconds("AUTO_REFRESH_SECONDS", 30*time.Minute)
+	launchHTTPClient.Timeout = parseEnvDurationSeconds("LAUNCH_API_TIMEOUT_SECONDS", 2*time.Second)
+	enableRocketPreview = parseEnvBool("ENABLE_ROCKET_PREVIEW")
 
-	// Parse templates once with required functions
-	var err error
-	tmpl, err = template.New("index.html").Funcs(template.FuncMap{
-		"getIconClassName": getIconClassName,
-	}).ParseFiles("templates/index.html")
-	if err != nil {
-		log.Fatalf("failed to parse templates: %v", err)
-	}
+	return nil
 }
 
 func readSecret(secretName string) (string, error) {
@@ -216,14 +258,67 @@ func parseEnvDurationSeconds(key string, def time.Duration) time.Duration {
 	return time.Duration(secs) * time.Second
 }
 
-func getWeatherWithCache() (WeatherData, error) {
+func parseEnvBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func setupOpenTelemetry(ctx context.Context) (func(context.Context) error, error) {
+	endpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	tracesEndpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))
+	if endpoint == "" && tracesEndpoint == "" {
+		return nil, nil
+	}
+
+	exporter, err := otlptracehttp.New(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create OTLP trace exporter: %w", err)
+	}
+
+	serviceName := strings.TrimSpace(os.Getenv("OTEL_SERVICE_NAME"))
+	if serviceName == "" {
+		serviceName = "kindle-weather"
+	}
+
+	res := resource.NewWithAttributes(
+		"",
+		attribute.String("service.name", serviceName),
+	)
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
+	)
+
+	return tp.Shutdown, nil
+}
+
+func buildAutoRefreshURL(r *http.Request, refreshToken int64) string {
+	q := r.URL.Query()
+	q.Set("refresh", strconv.FormatInt(refreshToken, 10))
+
+	return (&url.URL{
+		Path:     r.URL.Path,
+		RawQuery: q.Encode(),
+	}).String()
+}
+
+func getWeatherWithCache(ctx context.Context) (WeatherData, error) {
 	// Check if weather data is in cache
 	if cachedData, found := weatherCache.Get("weather"); found {
 		return cachedData.(WeatherData), nil
 	}
 
 	// If not in cache, fetch from API
-	data, err := fetchWeatherFromAPI()
+	data, err := fetchWeatherFromAPI(ctx)
 	if err != nil {
 		return WeatherData{}, err
 	}
@@ -234,14 +329,17 @@ func getWeatherWithCache() (WeatherData, error) {
 	return data, nil
 }
 
-func fetchWeatherFromAPI() (WeatherData, error) {
+func fetchWeatherFromAPI(ctx context.Context) (WeatherData, error) {
 	apiRequestsTotal.WithLabelValues("weather").Inc()
+	if strings.TrimSpace(weatherAPIURL) == "" {
+		return WeatherData{}, fmt.Errorf("weather API URL is not configured")
+	}
 
 	req, err := http.NewRequest(http.MethodGet, weatherAPIURL, nil)
 	if err != nil {
 		return WeatherData{}, &APIError{URL: weatherAPIURL, Operation: "build weather request", Err: err}
 	}
-	req = req.WithContext(context.Background())
+	req = req.WithContext(ctx)
 	req.Header.Set("User-Agent", "kindle-weather/1.0")
 
 	resp, err := httpClient.Do(req)
@@ -265,49 +363,73 @@ func fetchWeatherFromAPI() (WeatherData, error) {
 	return data, nil
 }
 
-func ConvertToETTime(timestamp string) (string, error) {
-	// Parse the timestamp into a time.Time object
+func formatLaunchTime(timestamp string) (string, error) {
 	parsedTime, err := time.Parse(time.RFC3339, timestamp)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse time: %w", err)
 	}
 
-	// Load the Eastern Time location
 	etLocation, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		return "", fmt.Errorf("failed to load location: %w", err)
 	}
 
-	// Convert the time to Eastern Time
 	etTime := parsedTime.In(etLocation)
-
-	// Format the time as 4:04pm
 	return etTime.Format("3:04pm"), nil
 }
 
-func buildTodayLaunchURL() (string, error) {
+func buildTodayKennedyLaunchURL(now time.Time) (string, error) {
 	baseURL, err := url.Parse(spacedevsAPIURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse base URL: %w", err)
 	}
 
-	query := url.Values{}
+	etLocation, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return "", fmt.Errorf("failed to load location: %w", err)
+	}
 
-	now := time.Now().UTC()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour).Add(-time.Second)
+	etNow := now.In(etLocation)
+	startOfDay := time.Date(etNow.Year(), etNow.Month(), etNow.Day(), 0, 0, 0, 0, etLocation)
+	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	query.Set("net__gte", start.Format(time.RFC3339))
-	query.Set("net__lt", end.Format(time.RFC3339))
+	query := baseURL.Query()
+	query.Set("limit", "5")
+	query.Set("ordering", "net")
+	query.Set("net__gte", startOfDay.UTC().Format(time.RFC3339))
+	query.Set("net__lt", endOfDay.UTC().Format(time.RFC3339))
 
 	baseURL.RawQuery = query.Encode()
 	return baseURL.String(), nil
 }
 
-func getUpcomingLaunches() ([]LaunchData, error) {
+func getTodayKennedyLaunch(ctx context.Context) (*LaunchInfo, error) {
+	cacheKey := todayLaunchCacheKey(time.Now())
+	if cachedData, found := launchCache.Get(cacheKey); found {
+		return cachedData.(launchCacheEntry).Launch, nil
+	}
+
+	launch, err := fetchTodayKennedyLaunch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	launchCache.Set(cacheKey, launchCacheEntry{Launch: launch}, cache.DefaultExpiration)
+
+	return launch, nil
+}
+
+func todayLaunchCacheKey(now time.Time) string {
+	etLocation, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return now.UTC().Format("2006-01-02")
+	}
+	return now.In(etLocation).Format("2006-01-02")
+}
+
+func fetchTodayKennedyLaunch(ctx context.Context) (*LaunchInfo, error) {
 	apiRequestsTotal.WithLabelValues("launches").Inc()
 
-	apiURL, err := buildTodayLaunchURL()
+	apiURL, err := buildTodayKennedyLaunchURL(time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("error building API URL: %w", err)
 	}
@@ -316,9 +438,10 @@ func getUpcomingLaunches() ([]LaunchData, error) {
 	if err != nil {
 		return nil, &APIError{URL: apiURL, Operation: "build launch request", Err: err}
 	}
+	req = req.WithContext(ctx)
 	req.Header.Set("User-Agent", "kindle-weather/1.0")
 
-	resp, err := httpClient.Do(req)
+	resp, err := launchHTTPClient.Do(req)
 	if err != nil {
 		return nil, &APIError{URL: apiURL, Operation: "GET launch data", Err: err}
 	}
@@ -336,24 +459,24 @@ func getUpcomingLaunches() ([]LaunchData, error) {
 		return nil, &APIError{URL: apiURL, Operation: "decode launch data", Err: err}
 	}
 
-	// Convert timestamps to ET
-	for i, launch := range data.Results {
-		if launch.WindowStart != "" {
-			data.Results[i].WindowStart, err = ConvertToETTime(launch.WindowStart)
-			if err != nil {
-				log.Printf("Failed to convert window_start for launch: %s", launch.Name)
-			}
+	for _, launch := range data.Results {
+		if !isKennedyLaunch(launch) || launch.WindowStart == "" {
+			continue
 		}
 
-		if launch.WindowEnd != "" {
-			data.Results[i].WindowEnd, err = ConvertToETTime(launch.WindowEnd)
-			if err != nil {
-				log.Printf("Failed to convert window_end for launch: %s", launch.Name)
-			}
+		formatted, err := formatLaunchTime(launch.WindowStart)
+		if err != nil {
+			log.Printf("Failed to format window_start for launch: %s", launch.Name)
+			continue
 		}
+
+		return &LaunchInfo{
+			Name:      launch.Name,
+			Scheduled: formatted,
+		}, nil
 	}
 
-	return data.Results, nil
+	return nil, nil
 }
 
 func isKennedyLaunch(launch LaunchData) bool {
@@ -426,9 +549,9 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("error during %s: %v (url: %s)", e.Operation, e.Err, e.URL)
 }
 
-func getWeather() (WeatherData, error) {
+func getWeather(ctx context.Context) (WeatherData, error) {
 	// Deprecated: use getWeatherWithCache/fetchWeatherFromAPI
-	return fetchWeatherFromAPI()
+	return fetchWeatherFromAPI(ctx)
 }
 
 func roundWeatherData(data *WeatherData) {
@@ -496,7 +619,22 @@ func getForecastHours(hourly []HourlyWeather) []HourlyWeather {
 	return result
 }
 
-func getTide() (TideData, error) {
+func getTide(ctx context.Context) (TideData, error) {
+	cacheKey := time.Now().Format("2006-01-02")
+	if cachedData, found := tideCache.Get(cacheKey); found {
+		return cachedData.(TideData), nil
+	}
+
+	tide, err := fetchTideFromAPI(ctx)
+	if err != nil {
+		return TideData{}, err
+	}
+	tideCache.Set(cacheKey, tide, cache.DefaultExpiration)
+
+	return tide, nil
+}
+
+func fetchTideFromAPI(ctx context.Context) (TideData, error) {
 	apiRequestsTotal.WithLabelValues("tide").Inc()
 
 	// Add height to URL parameters
@@ -506,6 +644,7 @@ func getTide() (TideData, error) {
 	if err != nil {
 		return TideData{}, &APIError{URL: noaaURLWithHeight, Operation: "build tide request", Err: err}
 	}
+	req = req.WithContext(ctx)
 	req.Header.Set("User-Agent", "kindle-weather/1.0")
 
 	resp, err := httpClient.Do(req)
@@ -520,9 +659,9 @@ func getTide() (TideData, error) {
 
 	var rawData struct {
 		Predictions []struct {
-			Time   string  `json:"t"`
-			Type   string  `json:"type"`
-			Height float64 `json:"v"`
+			Time   string `json:"t"`
+			Type   string `json:"type"`
+			Height string `json:"v"`
 		} `json:"predictions"`
 	}
 
@@ -540,9 +679,9 @@ func getTide() (TideData, error) {
 
 func processTideData(rawData struct {
 	Predictions []struct {
-		Time   string  `json:"t"`
-		Type   string  `json:"type"`
-		Height float64 `json:"v"`
+		Time   string `json:"t"`
+		Type   string `json:"type"`
+		Height string `json:"v"`
 	} `json:"predictions"`
 }) (TideData, error) {
 	var tideData TideData
@@ -559,10 +698,15 @@ func processTideData(rawData struct {
 		if err != nil {
 			return TideData{}, &APIError{URL: noaaAPIURL, Operation: "parse tide time", Err: err}
 		}
+
+		height, err := strconv.ParseFloat(p.Height, 64)
+		if err != nil {
+			return TideData{}, &APIError{URL: noaaAPIURL, Operation: "parse tide height", Err: err}
+		}
 		tideData.Predictions = append(tideData.Predictions, TidePrediction{
 			Time:   itemTime.Format("3:04 PM"),
 			Type:   p.Type,
-			Height: p.Height,
+			Height: height,
 		})
 	}
 
@@ -602,7 +746,14 @@ func getMoonPhaseIcon(moonPhase float64) string {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	weather, err := getWeatherWithCache()
+	ctx := r.Context()
+
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	weather, err := getWeatherWithCache(ctx)
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -613,7 +764,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tide, err := getTide()
+	tide, err := getTide(ctx)
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -624,15 +775,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	launches, err := getUpcomingLaunches()
+	kennedyLaunch, err := getTodayKennedyLaunch(ctx)
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
 			Level:     "ERROR",
 			Message:   fmt.Sprintf("Error getting launch data: %v", err),
 		})
-		http.Error(w, "Could not get upcoming launches", http.StatusInternalServerError)
-		return
+	}
+	if enableRocketPreview && r.URL.Query().Has("rocketPreview") {
+		kennedyLaunch = &LaunchInfo{Scheduled: "4:30pm"}
 	}
 
 	forecastHours := getForecastHours(weather.Hourly)
@@ -651,33 +803,29 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	horizontal := r.URL.Query().Has("h")
-
-	var kennedyLaunch *LaunchData
-	for i := range launches {
-		if isKennedyLaunch(launches[i]) {
-			kennedyLaunch = &launches[i]
-			break
-		}
-	}
+	refreshURL := buildAutoRefreshURL(r, time.Now().Unix())
+	autoRefreshSeconds := int(autoRefresh.Seconds())
 
 	data := struct {
-		Weather       WeatherData
-		Tide          TideData
-		TideSVG       template.HTML
-		ForecastHours []HourlyWeather
-		MoonPhaseIcon string
-		Launches      []LaunchData
-		Horizontal    bool
-		KennedyLaunch *LaunchData
+		Weather            WeatherData
+		Tide               TideData
+		TideSVG            template.HTML
+		ForecastHours      []HourlyWeather
+		MoonPhaseIcon      string
+		Horizontal         bool
+		KennedyLaunch      *LaunchInfo
+		AutoRefreshSeconds int
+		AutoRefreshURL     string
 	}{
-		Weather:       weather,
-		Tide:          tide,
-		TideSVG:       tideSVG,
-		ForecastHours: forecastHours,
-		MoonPhaseIcon: moonPhaseIcon,
-		Launches:      launches,
-		Horizontal:    horizontal,
-		KennedyLaunch: kennedyLaunch,
+		Weather:            weather,
+		Tide:               tide,
+		TideSVG:            tideSVG,
+		ForecastHours:      forecastHours,
+		MoonPhaseIcon:      moonPhaseIcon,
+		Horizontal:         horizontal,
+		KennedyLaunch:      kennedyLaunch,
+		AutoRefreshSeconds: autoRefreshSeconds,
+		AutoRefreshURL:     refreshURL,
 	}
 
 	err = tmpl.Execute(w, data)
@@ -691,15 +839,20 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 		return "", fmt.Errorf("no tide predictions to render")
 	}
 	const svgTemplate = `
-    <svg width="600" height="200" viewBox="0 0 600 200">
-        <polyline 
+    <svg width="600" height="95" viewBox="0 0 600 95">
+        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="1" />
+        <path
             fill="none" 
             stroke="black" 
             stroke-width="2"
-            points="{{range $i, $p := .Points}}{{if $i}}, {{end}}{{$p.X}},{{$p.Y}}{{end}}"
+            d="{{.Path}}"
         />
+        {{range .Points}}
+        <circle cx="{{.X}}" cy="{{.Y}}" r="4" fill="black" />
+        {{end}}
         {{range .Labels}}
-        <text x="{{.X}}" y="{{.Y}}" font-size="12" text-anchor="middle">{{.Text}}</text>
+        <text x="{{.X}}" y="{{.Y}}" font-size="13" text-anchor="middle" font-weight="bold">{{.Type}}</text>
+        <text x="{{.X}}" y="{{.TimeY}}" font-size="12" text-anchor="middle">{{.Time}}</text>
         {{end}}
     </svg>`
 
@@ -708,12 +861,31 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	}
 
 	type Label struct {
-		X, Y float64
-		Text string
+		X, Y, TimeY float64
+		Type        string
+		Time        string
 	}
 
 	var points []Point
 	var labels []Label
+	buildPath := func(points []Point) string {
+		if len(points) == 0 {
+			return ""
+		}
+		if len(points) == 1 {
+			return fmt.Sprintf("M %.1f %.1f", points[0].X, points[0].Y)
+		}
+
+		var path strings.Builder
+		path.WriteString(fmt.Sprintf("M %.1f %.1f", points[0].X, points[0].Y))
+		for i := 1; i < len(points); i++ {
+			prev := points[i-1]
+			curr := points[i]
+			midX := prev.X + ((curr.X - prev.X) / 2)
+			path.WriteString(fmt.Sprintf(" C %.1f %.1f, %.1f %.1f, %.1f %.1f", midX, prev.Y, midX, curr.Y, curr.X, curr.Y))
+		}
+		return path.String()
+	}
 
 	// Find min/max heights for scaling
 	minHeight := predictions[0].Height
@@ -730,21 +902,23 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	// Generate points and labels
 	for i, p := range predictions {
 		denom := float64(len(predictions) - 1)
-		x := 0.0
+		x := 300.0
 		if denom > 0 {
-			x = float64(i) * (600.0 / denom)
+			x = 35 + float64(i)*(530.0/denom)
 		}
 		scale := 1.0
 		if maxHeight != minHeight {
 			scale = (p.Height - minHeight) / (maxHeight - minHeight)
 		}
-		y := 180 - (scale * 160)
+		y := 58 - (scale * 28)
 
 		points = append(points, Point{X: x, Y: y})
 		labels = append(labels, Label{
-			X:    x,
-			Y:    195,
-			Text: p.Time,
+			X:     x,
+			Y:     78,
+			TimeY: 91,
+			Type:  p.Type,
+			Time:  p.Time,
 		})
 	}
 
@@ -754,9 +928,11 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	err := tmpl.Execute(&buf, struct {
 		Points []Point
 		Labels []Label
+		Path   string
 	}{
 		Points: points,
 		Labels: labels,
+		Path:   buildPath(points),
 	})
 	if err != nil {
 		return "", fmt.Errorf("error rendering SVG: %w", err)
@@ -766,12 +942,30 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 }
 
 func main() {
+	if err := configureRuntime(); err != nil {
+		logJSON(logEntry{
+			Timestamp: time.Now().Format(time.RFC3339),
+			Level:     "FATAL",
+			Message:   err.Error(),
+		})
+		os.Exit(1)
+	}
+
+	otelShutdown, err := setupOpenTelemetry(context.Background())
+	if err != nil {
+		logJSON(logEntry{
+			Timestamp: time.Now().Format(time.RFC3339),
+			Level:     "ERROR",
+			Message:   fmt.Sprintf("Failed to initialize OpenTelemetry: %v", err),
+		})
+	}
+
 	mux := http.NewServeMux()
-	mux.Handle("/", loggingMiddleware(http.HandlerFunc(handler)))
-	mux.Handle("/css/", loggingMiddleware(http.StripPrefix("/css/", http.FileServer(http.Dir("css")))))
-	mux.Handle("/font/", loggingMiddleware(http.StripPrefix("/font/", http.FileServer(http.Dir("font")))))
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.Handle("/health", http.HandlerFunc(healthHandler))
+	mux.Handle("/", loggingMiddleware(otelhttp.NewHandler(http.HandlerFunc(handler), "GET /")))
+	mux.Handle("/css/", loggingMiddleware(otelhttp.NewHandler(http.StripPrefix("/css/", http.FileServer(http.Dir("css"))), "GET /css")))
+	mux.Handle("/font/", loggingMiddleware(otelhttp.NewHandler(http.StripPrefix("/font/", http.FileServer(http.Dir("font"))), "GET /font")))
+	mux.Handle("/metrics", otelhttp.NewHandler(promhttp.Handler(), "GET /metrics"))
+	mux.Handle("/health", otelhttp.NewHandler(http.HandlerFunc(healthHandler), "GET /health"))
 
 	server := &http.Server{
 		Addr:         ":8080",
@@ -806,4 +1000,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
+
+	if otelShutdown != nil {
+		if err := otelShutdown(ctx); err != nil {
+			logJSON(logEntry{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Level:     "ERROR",
+				Message:   fmt.Sprintf("Failed to shut down OpenTelemetry: %v", err),
+			})
+		}
+	}
 }

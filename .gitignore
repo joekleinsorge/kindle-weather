@@ -1,3 +1,5 @@
 .secrets
 /secrets
 kindle-weather
+.DS_Store
+.playwright-mcp/
