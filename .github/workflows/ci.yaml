@@ -1,19 +1,53 @@
 name: Build, Push, Scan and Sign Docker Image
 on:
   push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build-and-push-image:
+    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      security-events: write 
+      security-events: write
       id-token: write
       attestations: write
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Validate Conventional Commit messages
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+        elif [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+          range="${{ github.event.before }}..${{ github.sha }}"
+        else
+          range="${{ github.sha }}"
+        fi
+
+        pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-zA-Z0-9._/-]+\))?!?: .+'
+        failed=0
+        while IFS= read -r subject; do
+          [[ -z "$subject" ]] && continue
+          if ! [[ "$subject" =~ $pattern ]]; then
+            echo "::error::Commit message is not Conventional Commits compliant: $subject"
+            failed=1
+          fi
+        done < <(git log --no-merges --format=%s "$range")
+
+        exit "$failed"
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v4
@@ -25,6 +59,7 @@ jobs:
       run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
     - name: Login to GitHub Container Registry
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
@@ -37,7 +72,7 @@ jobs:
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: true 
+        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: |
           ghcr.io/${{ github.repository }}/kindle-weather:latest
           ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}
@@ -45,6 +80,7 @@ jobs:
         sbom: true
 
     - name: Run Trivy vulnerability scanner
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'ghcr.io/${{ github.repository }}/kindle-weather:${{ env.SHA_SHORT }}'
@@ -52,25 +88,151 @@ jobs:
         output: 'trivy-results.sarif'
 
     - name: Upload Trivy scan results to GitHub Security tab
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: 'trivy-results.sarif'
 
     - name: Install cosign
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: sigstore/cosign-installer@main
 
     - name: Log in to GHCR
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
     - name: Sign the published Docker image
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         COSIGN_EXPERIMENTAL: "true"
       run: cosign sign -y ghcr.io/${{ github.repository }}/kindle-weather@${{ steps.push.outputs.digest }}
 
     - name: Attest
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: actions/attest-build-provenance@v4
       id: attest
       with:
         subject-name: ghcr.io/${{ github.repository }}/kindle-weather
         subject-digest: ${{ steps.push.outputs.digest }}
         push-to-registry: true
+
+  create-github-release:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Build conventional changelog
+      id: changelog
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
+        if [[ -z "$latest_tag" ]]; then
+          latest_tag="v0.0.0"
+          range="HEAD"
+        else
+          range="${latest_tag}..HEAD"
+        fi
+
+        bump="patch"
+        has_commits=false
+        breaking_pattern='^([a-zA-Z]+)(\([^)]+\))?!:'
+        feat_pattern='^feat(\([^)]+\))?:'
+        feat_section_pattern='^feat(\([^)]+\))?!?:'
+        fix_section_pattern='^fix(\([^)]+\))?!?:'
+        declare -a features=()
+        declare -a fixes=()
+        declare -a other=()
+
+        while IFS= read -r commit; do
+          [[ -z "$commit" ]] && continue
+          has_commits=true
+          subject="$(git log -1 --format=%s "$commit")"
+          body="$(git log -1 --format=%b "$commit")"
+          [[ -z "$subject" ]] && continue
+
+          if [[ "$subject" =~ $breaking_pattern ]] || grep -q 'BREAKING CHANGE:' <<< "$body"; then
+            bump="major"
+          elif [[ "$subject" =~ $feat_pattern ]] && [[ "$bump" != "major" ]]; then
+            bump="minor"
+          fi
+
+          clean_subject="$(sed -E 's/^[a-zA-Z]+(\([^)]+\))?!?:[[:space:]]*//' <<< "$subject")"
+          if [[ "$subject" =~ $feat_section_pattern ]]; then
+            features+=("- ${clean_subject}")
+          elif [[ "$subject" =~ $fix_section_pattern ]]; then
+            fixes+=("- ${clean_subject}")
+          else
+            other+=("- ${subject}")
+          fi
+        done < <(git log --no-merges --format='%H' "$range")
+
+        if [[ "$has_commits" == "false" ]]; then
+          echo "release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        version="${latest_tag#v}"
+        IFS=. read -r major minor patch <<< "$version"
+        case "$bump" in
+          major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+          minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+          patch)
+            patch=$((patch + 1))
+            ;;
+        esac
+
+        next_tag="v${major}.${minor}.${patch}"
+        if git rev-parse "$next_tag" >/dev/null 2>&1; then
+          echo "release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        {
+          echo "## Changes"
+          echo
+          if [[ ${#features[@]} -gt 0 ]]; then
+            echo "### Features"
+            printf '%s\n' "${features[@]}"
+            echo
+          fi
+          if [[ ${#fixes[@]} -gt 0 ]]; then
+            echo "### Fixes"
+            printf '%s\n' "${fixes[@]}"
+            echo
+          fi
+          if [[ ${#other[@]} -gt 0 ]]; then
+            echo "### Other"
+            printf '%s\n' "${other[@]}"
+            echo
+          fi
+          echo "Docker image: ghcr.io/${GITHUB_REPOSITORY}/kindle-weather:${GITHUB_SHA::7}"
+        } > release-notes.md
+
+        echo "release=true" >> "$GITHUB_OUTPUT"
+        echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
+
+    - name: Create GitHub release
+      if: ${{ steps.changelog.outputs.release == 'true' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "${{ steps.changelog.outputs.tag }}" \
+          --target "$GITHUB_SHA" \
+          --title "${{ steps.changelog.outputs.tag }}" \
+          --notes-file release-notes.md
