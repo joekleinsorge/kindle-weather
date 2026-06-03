@@ -942,6 +942,10 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	if err := configureRuntime(); err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
@@ -1010,4 +1014,18 @@ func main() {
 			})
 		}
 	}
+}
+
+func runHealthcheck() int {
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:8080/health")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }
