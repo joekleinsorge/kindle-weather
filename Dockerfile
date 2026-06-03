@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.24
 
 FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest@sha256:3d8fa865f7382d566f7a13aa67a90b5f758637ab75776ecb76e3da10df13ad66 AS builder
 
