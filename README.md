@@ -57,6 +57,25 @@ Optional environment variables:
    ./kindle-weather
    ```
 
+## Testing
+
+Run unit tests:
+
+```bash
+go test ./...
+```
+
+Run the local end-to-end check:
+
+```bash
+make e2e
+```
+
+The e2e check builds the binary, starts a local mock upstream API, runs the real
+HTTP server, and verifies the main page, static CSS, metrics, normal tide
+rendering, and the no-tide fallback. Pull requests targeting `main` run this
+check in CI before the Docker image build.
+
 ## Deployment
 
 ### Docker

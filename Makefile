@@ -1,7 +1,13 @@
 COMPOSE ?= docker compose
 COMPOSE_FILE ?= docker-compose.yml
 
-.PHONY: docker-build docker-run docker-stop
+.PHONY: test e2e docker-build docker-run docker-stop
+
+test:
+	go test ./...
+
+e2e:
+	.github/scripts/e2e.sh
 
 docker-build:
 	$(COMPOSE) -f $(COMPOSE_FILE) build
