@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"html/template"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
@@ -176,6 +178,37 @@ func TestProcessTideData_InvalidHeight(t *testing.T) {
 	}
 }
 
+func TestProcessTideData_SkipsInvalidPredictions(t *testing.T) {
+	rawData := struct {
+		Predictions []struct {
+			Time   string `json:"t"`
+			Type   string `json:"type"`
+			Height string `json:"v"`
+		} `json:"predictions"`
+	}{
+		Predictions: []struct {
+			Time   string `json:"t"`
+			Type   string `json:"type"`
+			Height string `json:"v"`
+		}{
+			{Time: "2024-01-01 13:45", Type: "H", Height: "4.2"},
+			{Time: "bad-time", Type: "L", Height: "0.2"},
+			{Time: "2024-01-01 19:30", Type: "X", Height: "0.2"},
+		},
+	}
+
+	data, err := processTideData(rawData)
+	if err != nil {
+		t.Fatalf("processTideData() error = %v", err)
+	}
+	if len(data.Predictions) != 1 {
+		t.Fatalf("got %d valid predictions; want 1", len(data.Predictions))
+	}
+	if data.Predictions[0].Time != "1:45 PM" || data.Predictions[0].Type != "H" {
+		t.Fatalf("unexpected prediction: %+v", data.Predictions[0])
+	}
+}
+
 func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 	svg, err := generateTideSVG([]TidePrediction{
 		{Time: "3:17 AM", Type: "L", Height: 0.1},
@@ -203,6 +236,52 @@ func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 	}
 	if strings.Contains(rendered, "<polyline") {
 		t.Fatalf("generated tide SVG should use a curved path, got: %s", rendered)
+	}
+}
+
+func TestGenerateTideSVG_NoPredictionsRendersFallback(t *testing.T) {
+	svg, err := generateTideSVG(nil)
+	if err != nil {
+		t.Fatalf("generateTideSVG() error = %v", err)
+	}
+
+	if !strings.Contains(string(svg), "Tide data unavailable") {
+		t.Fatalf("generated tide fallback missing unavailable text: %s", svg)
+	}
+}
+
+func TestFetchTideFromAPI_RetriesTransientFailure(t *testing.T) {
+	oldNOAAURL := noaaAPIURL
+	oldHTTPClient := httpClient
+	defer func() {
+		noaaAPIURL = oldNOAAURL
+		httpClient = oldHTTPClient
+	}()
+
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"predictions":[{"t":"2024-01-01 13:45","type":"H","v":"4.2"}]}`))
+	}))
+	defer server.Close()
+
+	noaaAPIURL = server.URL + "?station=8720218"
+	httpClient = server.Client()
+
+	data, err := fetchTideFromAPI(context.Background())
+	if err != nil {
+		t.Fatalf("fetchTideFromAPI() error = %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("fetchTideFromAPI() attempts = %d; want 2", attempts)
+	}
+	if len(data.Predictions) != 1 {
+		t.Fatalf("got %d predictions; want 1", len(data.Predictions))
 	}
 }
 

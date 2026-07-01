@@ -32,10 +32,12 @@ import (
 )
 
 const (
-	secretMountPath       = "/etc/secrets"
-	weatherAPIURLTemplate = "https://api.openweathermap.org/data/3.0/onecall?lat=29.65&lon=-81.20&exclude=minutely&appid=%s&units=imperial"
-	noaaAPIURLTemplate    = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=NOS.COOPS.TAC.WL&datum=MLLW&station=8720218&time_zone=lst_ldt&units=english&interval=hilo&format=json&date=today"
-	spacedevsAPIURL       = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?location__ids=27&format=json"
+	secretMountPath        = "/etc/secrets"
+	weatherAPIURLTemplate  = "https://api.openweathermap.org/data/3.0/onecall?lat=29.65&lon=-81.20&exclude=minutely&appid=%s&units=imperial"
+	noaaAPIURLTemplate     = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=NOS.COOPS.TAC.WL&datum=MLLW&station=8720218&time_zone=lst_ldt&units=english&interval=hilo&format=json&date=today"
+	spacedevsAPIURLDefault = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?location__ids=27&format=json"
+	tideCacheKeyLatest     = "latest-successful"
+	tideAPIMaxAttempts     = 3
 )
 
 //go:embed templates/*.html
@@ -44,6 +46,7 @@ var templatesFS embed.FS
 var (
 	weatherAPIURL       string
 	noaaAPIURL          string
+	spacedevsAPIURL     string
 	weatherCache        *cache.Cache
 	tideCache           *cache.Cache
 	launchCache         *cache.Cache
@@ -197,6 +200,7 @@ func init() {
 		Transport: otelhttp.NewTransport(http.DefaultTransport),
 	}
 	noaaAPIURL = noaaAPIURLTemplate
+	spacedevsAPIURL = spacedevsAPIURLDefault
 	weatherCache = cache.New(time.Hour, 2*time.Hour)
 	tideCache = cache.New(30*time.Minute, time.Hour)
 	launchCache = cache.New(15*time.Minute, time.Hour)
@@ -213,16 +217,28 @@ func init() {
 }
 
 func configureRuntime() error {
-	openWeatherAPIKey := strings.TrimSpace(os.Getenv("OPENWEATHER_API_KEY"))
-	if openWeatherAPIKey == "" {
-		var err error
-		openWeatherAPIKey, err = readSecret("openweather-api-key")
-		if err != nil {
-			return fmt.Errorf("failed to read OpenWeather API key: %w", err)
+	weatherAPIURL = strings.TrimSpace(os.Getenv("WEATHER_API_URL"))
+	if weatherAPIURL == "" {
+		openWeatherAPIKey := strings.TrimSpace(os.Getenv("OPENWEATHER_API_KEY"))
+		if openWeatherAPIKey == "" {
+			var err error
+			openWeatherAPIKey, err = readSecret("openweather-api-key")
+			if err != nil {
+				return fmt.Errorf("failed to read OpenWeather API key: %w", err)
+			}
 		}
+		weatherAPIURL = fmt.Sprintf(weatherAPIURLTemplate, openWeatherAPIKey)
 	}
-	weatherAPIURL = fmt.Sprintf(weatherAPIURLTemplate, openWeatherAPIKey)
-	noaaAPIURL = noaaAPIURLTemplate
+
+	noaaAPIURL = strings.TrimSpace(os.Getenv("NOAA_API_URL"))
+	if noaaAPIURL == "" {
+		noaaAPIURL = noaaAPIURLTemplate
+	}
+
+	spacedevsAPIURL = strings.TrimSpace(os.Getenv("SPACEDEVS_API_URL"))
+	if spacedevsAPIURL == "" {
+		spacedevsAPIURL = spacedevsAPIURLDefault
+	}
 
 	exp := parseEnvDurationSeconds("CACHE_EXPIRATION", time.Hour)
 	cleanup := parseEnvDurationSeconds("CACHE_CLEANUP_INTERVAL", 2*time.Hour)
@@ -627,34 +643,88 @@ func getTide(ctx context.Context) (TideData, error) {
 
 	tide, err := fetchTideFromAPI(ctx)
 	if err != nil {
+		if cachedData, found := tideCache.Get(tideCacheKeyLatest); found {
+			logJSON(logEntry{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Level:     "WARN",
+				Message:   fmt.Sprintf("Using cached tide data after refresh failure: %v", err),
+			})
+			return cachedData.(TideData), nil
+		}
 		return TideData{}, err
 	}
 	tideCache.Set(cacheKey, tide, cache.DefaultExpiration)
+	tideCache.Set(tideCacheKeyLatest, tide, cache.NoExpiration)
 
 	return tide, nil
 }
 
 func fetchTideFromAPI(ctx context.Context) (TideData, error) {
+	tideURL, err := buildTideURL(noaaAPIURL)
+	if err != nil {
+		return TideData{}, err
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= tideAPIMaxAttempts; attempt++ {
+		tideData, retry, err := fetchTideAttempt(ctx, tideURL)
+		if err == nil {
+			return tideData, nil
+		}
+		lastErr = err
+		if !retry || attempt == tideAPIMaxAttempts || ctx.Err() != nil {
+			break
+		}
+
+		timer := time.NewTimer(time.Duration(attempt) * 250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return TideData{}, &APIError{URL: tideURL, Operation: "GET tide data", Err: ctx.Err()}
+		case <-timer.C:
+		}
+	}
+
+	return TideData{}, lastErr
+}
+
+func buildTideURL(baseURL string) (string, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", &APIError{URL: baseURL, Operation: "build tide request", Err: err}
+	}
+	q := u.Query()
+	q.Set("product", "predictions")
+	q.Set("datum", "MLLW")
+	q.Set("units", "english")
+	q.Set("time_zone", "lst_ldt")
+	q.Set("interval", "hilo")
+	q.Set("format", "json")
+	if q.Get("date") == "" {
+		q.Set("date", "today")
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+func fetchTideAttempt(ctx context.Context, tideURL string) (TideData, bool, error) {
 	apiRequestsTotal.WithLabelValues("tide").Inc()
 
-	// Add height to URL parameters
-	noaaURLWithHeight := noaaAPIURL + "&datatype=hilo&datum=MLLW"
-
-	req, err := http.NewRequest(http.MethodGet, noaaURLWithHeight, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tideURL, nil)
 	if err != nil {
-		return TideData{}, &APIError{URL: noaaURLWithHeight, Operation: "build tide request", Err: err}
+		return TideData{}, false, &APIError{URL: tideURL, Operation: "build tide request", Err: err}
 	}
-	req = req.WithContext(ctx)
 	req.Header.Set("User-Agent", "kindle-weather/1.0")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return TideData{}, &APIError{URL: noaaURLWithHeight, Operation: "GET tide data", Err: err}
+		return TideData{}, true, &APIError{URL: tideURL, Operation: "GET tide data", Err: err}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return TideData{}, &APIError{URL: noaaURLWithHeight, Operation: "GET tide data", Err: fmt.Errorf("status code %d", resp.StatusCode)}
+		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode >= http.StatusInternalServerError
+		return TideData{}, retry, &APIError{URL: tideURL, Operation: "GET tide data", Err: fmt.Errorf("status code %d", resp.StatusCode)}
 	}
 
 	var rawData struct {
@@ -666,15 +736,15 @@ func fetchTideFromAPI(ctx context.Context) (TideData, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
-		return TideData{}, &APIError{URL: noaaURLWithHeight, Operation: "decode tide data", Err: err}
+		return TideData{}, true, &APIError{URL: tideURL, Operation: "decode tide data", Err: err}
 	}
 
 	tideData, err := processTideData(rawData)
 	if err != nil {
-		return TideData{}, err
+		return TideData{}, false, err
 	}
 
-	return tideData, nil
+	return tideData, false, nil
 }
 
 func processTideData(rawData struct {
@@ -689,25 +759,32 @@ func processTideData(rawData struct {
 		return TideData{}, &APIError{URL: noaaAPIURL, Operation: "process tide data", Err: fmt.Errorf("no predictions found")}
 	}
 
+	var skipped []string
 	for _, p := range rawData.Predictions {
 		if p.Type != "H" && p.Type != "L" {
-			return TideData{}, &APIError{URL: noaaAPIURL, Operation: "process tide data", Err: fmt.Errorf("invalid tide type: %s", p.Type)}
+			skipped = append(skipped, fmt.Sprintf("invalid tide type %q", p.Type))
+			continue
 		}
 
 		itemTime, err := time.Parse("2006-01-02 15:04", p.Time)
 		if err != nil {
-			return TideData{}, &APIError{URL: noaaAPIURL, Operation: "parse tide time", Err: err}
+			skipped = append(skipped, fmt.Sprintf("invalid tide time %q", p.Time))
+			continue
 		}
 
 		height, err := strconv.ParseFloat(p.Height, 64)
 		if err != nil {
-			return TideData{}, &APIError{URL: noaaAPIURL, Operation: "parse tide height", Err: err}
+			skipped = append(skipped, fmt.Sprintf("invalid tide height %q", p.Height))
+			continue
 		}
 		tideData.Predictions = append(tideData.Predictions, TidePrediction{
 			Time:   itemTime.Format("3:04 PM"),
 			Type:   p.Type,
 			Height: height,
 		})
+	}
+	if len(tideData.Predictions) == 0 {
+		return TideData{}, &APIError{URL: noaaAPIURL, Operation: "process tide data", Err: fmt.Errorf("no valid predictions found: %s", strings.Join(skipped, "; "))}
 	}
 
 	return tideData, nil
@@ -768,11 +845,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
-			Level:     "ERROR",
+			Level:     "WARN",
 			Message:   fmt.Sprintf("Error getting tide data: %v", err),
 		})
-		http.Error(w, "Could not get tide data", http.StatusInternalServerError)
-		return
 	}
 
 	kennedyLaunch, err := getTodayKennedyLaunch(ctx)
@@ -795,11 +870,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logJSON(logEntry{
 			Timestamp: time.Now().Format(time.RFC3339),
-			Level:     "ERROR",
+			Level:     "WARN",
 			Message:   fmt.Sprintf("Error generating tide SVG: %v", err),
 		})
-		http.Error(w, "Could not generate tide chart", http.StatusInternalServerError)
-		return
+		tideSVG = tideUnavailableSVG()
 	}
 
 	horizontal := r.URL.Query().Has("h")
@@ -836,7 +910,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	if len(predictions) == 0 {
-		return "", fmt.Errorf("no tide predictions to render")
+		return tideUnavailableSVG(), nil
 	}
 	const svgTemplate = `
     <svg width="600" height="95" viewBox="0 0 600 95">
@@ -939,6 +1013,14 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	}
 
 	return template.HTML(buf.String()), nil
+}
+
+func tideUnavailableSVG() template.HTML {
+	return template.HTML(`
+    <svg width="600" height="95" viewBox="0 0 600 95">
+        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="1" stroke-dasharray="6 6" />
+        <text x="300" y="48" font-size="14" text-anchor="middle" font-weight="bold">Tide data unavailable</text>
+    </svg>`)
 }
 
 func main() {
