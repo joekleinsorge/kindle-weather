@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.25
 
-FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest@sha256:072cb18c2146f22265a2d7862d37a92665a632060ae6fc0794750f2e7694ffe1 AS builder
+FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest@sha256:9d1a41a769705262c20752429c5b70849ee1daac2cd06283554f79fff804cb0b AS builder
 
 ARG TARGETARCH
 WORKDIR /src
