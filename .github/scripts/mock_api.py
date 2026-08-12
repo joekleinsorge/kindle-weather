@@ -104,6 +104,17 @@ def launch_payload():
     }
 
 
+def surf_payload():
+    return {
+        "hourly": {
+            "time": [utc_timestamp(3600)],
+            "wave_height": [2.5],
+            "wave_direction": [90],
+            "wave_period": [9],
+        },
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
@@ -117,6 +128,8 @@ class Handler(BaseHTTPRequestHandler):
             self.write_json({"predictions": []})
         elif path.startswith("/launches/upcoming"):
             self.write_json(launch_payload())
+        elif path == "/surf":
+            self.write_json(surf_payload())
         else:
             self.send_error(404)
 

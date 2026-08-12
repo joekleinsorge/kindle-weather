@@ -245,6 +245,7 @@ func configureRuntime() error {
 	weatherCache = cache.New(exp, cleanup)
 	tideCache = cache.New(parseEnvDurationSeconds("TIDE_CACHE_EXPIRATION", 30*time.Minute), cleanup)
 	launchCache = cache.New(parseEnvDurationSeconds("LAUNCH_CACHE_EXPIRATION", 15*time.Minute), cleanup)
+	configureSurfRuntime(cleanup)
 	autoRefresh = parseEnvDurationSeconds("AUTO_REFRESH_SECONDS", 30*time.Minute)
 	launchHTTPClient.Timeout = parseEnvDurationSeconds("LAUNCH_API_TIMEOUT_SECONDS", 2*time.Second)
 	enableRocketPreview = parseEnvBool("ENABLE_ROCKET_PREVIEW")
@@ -862,6 +863,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		kennedyLaunch = &LaunchInfo{Scheduled: "4:30pm"}
 	}
 
+	goodSurfToday := false
+	surfForecast, err := getSurfForecast(ctx)
+	if err != nil {
+		logJSON(logEntry{
+			Timestamp: time.Now().Format(time.RFC3339),
+			Level:     "WARN",
+			Message:   fmt.Sprintf("Error getting surf data: %v", err),
+		})
+	} else {
+		goodSurfToday = isGoodSurfToday(surfForecast, weather, time.Now())
+	}
+	beachStatus := getBeachStatus(tide.Predictions, goodSurfToday, time.Now())
+
 	forecastHours := getForecastHours(weather.Hourly)
 	moonPhaseIcon := getMoonPhaseIcon(weather.Daily[0].MoonPhase)
 
@@ -888,6 +902,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		MoonPhaseIcon      string
 		Horizontal         bool
 		KennedyLaunch      *LaunchInfo
+		BeachStatus        *BeachStatus
 		AutoRefreshSeconds int
 		AutoRefreshURL     string
 	}{
@@ -898,6 +913,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		MoonPhaseIcon:      moonPhaseIcon,
 		Horizontal:         horizontal,
 		KennedyLaunch:      kennedyLaunch,
+		BeachStatus:        beachStatus,
 		AutoRefreshSeconds: autoRefreshSeconds,
 		AutoRefreshURL:     refreshURL,
 	}

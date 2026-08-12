@@ -10,6 +10,7 @@ A web application that displays weather, tide, moon phase, and space launch info
 - Moon phase display
 - Sunrise and sunset times
 - Upcoming space launches
+- Conditional beach notices for good surf and upcoming daytime super-low tides
 - Simple design optimized for Kindle displays
 - Caching for API responses to reduce calls
 - OpenTelemetry tracing (OTLP exporter)
@@ -41,7 +42,19 @@ Optional environment variables:
 - `TIDE_CACHE_EXPIRATION` (default: `1800`)
 - `LAUNCH_CACHE_EXPIRATION` (default: `900`)
 - `LAUNCH_API_TIMEOUT_SECONDS` (default: `2`)
+- `SURF_API_URL` (defaults to the Open-Meteo Marine API for Crescent Beach)
+- `SURF_CACHE_EXPIRATION` (default: `1800`)
 - `ENABLE_ROCKET_PREVIEW` (default: disabled)
+
+The surf notice uses wave height, period, and direction from Open-Meteo,
+combined with the existing OpenWeather wind forecast. It appears only when a
+remaining daylight hour is expected to have 1.5–6 ft waves at 7 seconds or
+longer, an easterly swell direction, and light or offshore wind. Surf forecast
+data is provided by [Open-Meteo](https://open-meteo.com/en/docs/marine-weather-api).
+
+The tide notice appears for the next low tide at or below 0 ft when it is still
+upcoming and falls between 7:00 AM and 7:00 PM. It replaces the surf notice when
+both conditions apply.
 
 ## Build
 

@@ -377,7 +377,36 @@ func TestIndexTemplate_LaunchPreviewRendersIconAndTime(t *testing.T) {
 	}
 }
 
+func TestIndexTemplate_BeachStatusIsConditional(t *testing.T) {
+	if rendered := renderIndexTemplateWithBeachStatus(t, nil); strings.Contains(rendered, `id="beach-status"`) {
+		t.Fatalf("expected no beach status without a message: %s", rendered)
+	}
+
+	surf := renderIndexTemplateWithBeachStatus(t, &BeachStatus{Kind: "surf", Text: "Good surf today"})
+	for _, want := range []string{`id="beach-status"`, `class="surfboard-icon"`, `viewBox="0 0 44 24"`, "Good surf today"} {
+		if !strings.Contains(surf, want) {
+			t.Fatalf("expected rendered surf status to contain %q: %s", want, surf)
+		}
+	}
+
+	tide := renderIndexTemplateWithBeachStatus(t, &BeachStatus{Kind: "tide", Text: "Super low tide at 1:45 PM"})
+	if !strings.Contains(tide, "Super low tide at 1:45 PM") {
+		t.Fatalf("expected rendered tide status: %s", tide)
+	}
+	if strings.Contains(tide, `class="surfboard-icon"`) {
+		t.Fatalf("expected tide status not to use the surf icon: %s", tide)
+	}
+}
+
 func renderIndexTemplate(t *testing.T, launch *LaunchInfo) string {
+	return renderIndexTemplateData(t, launch, nil)
+}
+
+func renderIndexTemplateWithBeachStatus(t *testing.T, status *BeachStatus) string {
+	return renderIndexTemplateData(t, nil, status)
+}
+
+func renderIndexTemplateData(t *testing.T, launch *LaunchInfo, status *BeachStatus) string {
 	t.Helper()
 
 	data := struct {
@@ -388,6 +417,7 @@ func renderIndexTemplate(t *testing.T, launch *LaunchInfo) string {
 		MoonPhaseIcon      string
 		Horizontal         bool
 		KennedyLaunch      *LaunchInfo
+		BeachStatus        *BeachStatus
 		AutoRefreshSeconds int
 		AutoRefreshURL     string
 	}{
@@ -403,6 +433,7 @@ func renderIndexTemplate(t *testing.T, launch *LaunchInfo) string {
 		TideSVG:            template.HTML(`<svg></svg>`),
 		MoonPhaseIcon:      "wi-moon-full",
 		KennedyLaunch:      launch,
+		BeachStatus:        status,
 		AutoRefreshSeconds: 1800,
 		AutoRefreshURL:     "/",
 	}
