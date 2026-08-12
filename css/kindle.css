@@ -56,6 +56,43 @@ html, body {
     margin: 0;
 }
 
+#beach-status {
+    position: absolute;
+    top: 40%;
+    right: 5%;
+    left: 5%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    font-size: 1.35rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.surfboard-icon {
+    display: block;
+    width: 38px;
+    height: 24px;
+    transform: rotate(-8deg);
+}
+
+.surfboard-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: #000;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.surfboard-outline {
+    fill: #fff;
+}
+
 .forecast {
     position: absolute;
     width: 100%;
@@ -240,6 +277,11 @@ body.horizontal #description {
     max-height: 15%;
     text-align: center;
     font-size: 1.5rem;
+}
+
+body.horizontal #beach-status {
+    top: 38%;
+    font-size: 1.1rem;
 }
 
 body.horizontal #launches {

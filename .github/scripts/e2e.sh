@@ -88,6 +88,7 @@ start_app() {
     export WEATHER_API_URL="${MOCK_URL}/weather"
     export NOAA_API_URL="${MOCK_URL}${tide_path}"
     export SPACEDEVS_API_URL="${MOCK_URL}/launches/upcoming/"
+    export SURF_API_URL="${MOCK_URL}/surf"
     export AUTO_REFRESH_SECONDS=60
     export LAUNCH_API_TIMEOUT_SECONDS=5
     exec "${TMPDIR}/kindle-weather"
@@ -116,6 +117,7 @@ assert_contains "${TMPDIR}/page.html" "9:24 AM"
 assert_contains "${TMPDIR}/page.html" "id=\"launches\""
 assert_contains "${TMPDIR}/kindle.css" ".tide-section"
 assert_contains "${TMPDIR}/metrics.txt" "http_requests_total"
+assert_contains "${TMPDIR}/metrics.txt" 'api_requests_total{api="surf"}'
 stop_app
 
 start_app "/tide-empty"
