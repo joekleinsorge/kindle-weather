@@ -3,11 +3,14 @@ html, body {
     margin: 0;
     padding: 0;
     font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    background: #fff;
 }
 
 #page {
     position: relative;
     height: 100%;
+    box-sizing: border-box;
     overflow: hidden;
 }
 
@@ -39,11 +42,18 @@ html, body {
 
 #description {
     position: absolute;
-    right: 3.3%;
-    text-align: right;
-    bottom: 50%;
+    top: 24%;
+    right: 5%;
+    left: 5%;
+    max-height: 17%;
+    overflow: hidden;
+    text-align: center;
     font-size: 2rem;
-    /* font-size: 7rem; */
+    line-height: 1.2;
+}
+
+#description p {
+    margin: 0;
 }
 
 .forecast {
@@ -59,7 +69,8 @@ html, body {
 }
 
 .col {
-    width: 24.5%;
+    width: 25%;
+    box-sizing: border-box;
     border-right: 1px solid black;
     text-align: center;
     height: 100%;
@@ -97,15 +108,16 @@ html, body {
 
 .tide-section {
     position: absolute;
-    bottom: 9%;
+    top: 82%;
+    bottom: auto;
     width: 100%;
-    height: 95px;
+    height: 125px;
     text-align: center;
 }
 
 .tide-section svg {
     width: 92%;
-    height: 95px;
+    height: 125px;
 }
 
 .tide-wave {
@@ -155,7 +167,7 @@ html, body {
 
 #moon {
     position: absolute;
-    bottom: 0;
+    bottom: 1%;
     left: 3.3%;
     font-size: 2rem;
     /* font-size: 4.3rem; */
@@ -163,7 +175,7 @@ html, body {
 
 #sun {
     position: absolute;
-    bottom: 0;
+    bottom: 1%;
     right: 3.3%;
     /* font-size: 4.3rem; */
     font-size: 2rem;
@@ -199,7 +211,7 @@ html, body {
 }
 
 body.horizontal #page {
-    padding: 10px 0;
+    padding: 0;
 }
 
 body.horizontal #iconWrapper {
@@ -221,16 +233,17 @@ body.horizontal #temp {
 }
 
 body.horizontal #description {
-    top: 28%;
+    top: 22%;
     bottom: auto;
     left: 5%;
     right: 5%;
+    max-height: 15%;
     text-align: center;
     font-size: 1.5rem;
 }
 
 body.horizontal #launches {
-    top: 34%;
+    top: 18%;
     bottom: auto;
     left: auto;
     right: 5%;
@@ -243,7 +256,7 @@ body.horizontal .rocket-icon {
 }
 
 body.horizontal .forecast {
-    top: 52%;
+    top: 44%;
     bottom: auto;
     left: 3%;
     right: 3%;
@@ -251,10 +264,6 @@ body.horizontal .forecast {
     height: 28%;
     border-top-width: 3px;
     border-bottom-width: 3px;
-}
-
-body.horizontal .col {
-    width: 23.5%;
 }
 
 body.horizontal .forecastIconWrapper {
@@ -271,18 +280,14 @@ body.horizontal .colTime {
 }
 
 body.horizontal .tide-section {
-    bottom: 13%;
-    top: auto;
-    height: 95px;
+    top: 73%;
+    bottom: auto;
+    height: 125px;
 }
 
 body.horizontal .tide-section svg {
     width: 90%;
-    height: 95px;
-}
-
-body.horizontal .tide-section text {
-    font-size: 11px;
+    height: 125px;
 }
 
 body.horizontal #moon {

@@ -914,19 +914,19 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 	}
 	const svgTemplate = `
     <svg width="600" height="95" viewBox="0 0 600 95">
-        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="1" />
+        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="1.5" />
         <path
             fill="none" 
             stroke="black" 
-            stroke-width="2"
+            stroke-width="3"
             d="{{.Path}}"
         />
         {{range .Points}}
-        <circle cx="{{.X}}" cy="{{.Y}}" r="4" fill="black" />
+        <circle cx="{{.X}}" cy="{{.Y}}" r="5" fill="black" />
         {{end}}
         {{range .Labels}}
-        <text x="{{.X}}" y="{{.Y}}" font-size="13" text-anchor="middle" font-weight="bold">{{.Type}}</text>
-        <text x="{{.X}}" y="{{.TimeY}}" font-size="12" text-anchor="middle">{{.Time}}</text>
+        <text x="{{.X}}" y="{{.Y}}" font-size="15" text-anchor="middle" font-weight="bold">{{.Type}}</text>
+        <text x="{{.X}}" y="{{.TimeY}}" font-size="14" text-anchor="middle">{{.Time}}</text>
         {{end}}
     </svg>`
 
@@ -1018,8 +1018,8 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
 func tideUnavailableSVG() template.HTML {
 	return template.HTML(`
     <svg width="600" height="95" viewBox="0 0 600 95">
-        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="1" stroke-dasharray="6 6" />
-        <text x="300" y="48" font-size="14" text-anchor="middle" font-weight="bold">Tide data unavailable</text>
+        <line x1="35" y1="44" x2="565" y2="44" stroke="black" stroke-width="2" stroke-dasharray="6 6" />
+        <text x="300" y="49" font-size="18" text-anchor="middle" font-weight="bold">Tide data unavailable</text>
     </svg>`)
 }
 
