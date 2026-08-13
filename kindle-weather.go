@@ -941,8 +941,8 @@ func generateTideSVG(predictions []TidePrediction) (template.HTML, error) {
         <circle cx="{{.X}}" cy="{{.Y}}" r="5" fill="black" />
         {{end}}
         {{range .Labels}}
-        <text x="{{.X}}" y="{{.Y}}" font-size="15" text-anchor="middle" font-weight="bold">{{.Type}}</text>
-        <text x="{{.X}}" y="{{.TimeY}}" font-size="14" text-anchor="middle">{{.Time}}</text>
+        <text x="{{.X}}" y="{{.Y}}" font-size="17" text-anchor="middle" font-weight="bold">{{.Type}}</text>
+        <text x="{{.X}}" y="{{.TimeY}}" font-size="16" text-anchor="middle" font-weight="bold">{{.Time}}</text>
         {{end}}
     </svg>`
 

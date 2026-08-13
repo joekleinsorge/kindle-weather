@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -225,10 +227,10 @@ func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 		` C `,
 		`x="35"`,
 		`x="565"`,
-		`>L</text>`,
-		`>H</text>`,
-		`>3:17 AM</text>`,
-		`>9:24 AM</text>`,
+		`font-size="17" text-anchor="middle" font-weight="bold">L</text>`,
+		`font-size="17" text-anchor="middle" font-weight="bold">H</text>`,
+		`font-size="16" text-anchor="middle" font-weight="bold">3:17 AM</text>`,
+		`font-size="16" text-anchor="middle" font-weight="bold">9:24 AM</text>`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("generated tide SVG missing %q: %s", want, rendered)
@@ -236,6 +238,22 @@ func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 	}
 	if strings.Contains(rendered, "<polyline") {
 		t.Fatalf("generated tide SVG should use a curved path, got: %s", rendered)
+	}
+}
+
+func TestPortraitTideChartHeightMatchesViewBox(t *testing.T) {
+	css, err := os.ReadFile("css/kindle.css")
+	if err != nil {
+		t.Fatalf("read Kindle CSS: %v", err)
+	}
+
+	for _, pattern := range []string{
+		`(?s)\.tide-section\s*\{[^}]*height:\s*95px;`,
+		`(?s)\.tide-section svg\s*\{[^}]*height:\s*95px;`,
+	} {
+		if !regexp.MustCompile(pattern).Match(css) {
+			t.Errorf("portrait tide CSS does not match %q", pattern)
+		}
 	}
 }
 
