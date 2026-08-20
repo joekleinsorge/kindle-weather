@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.25
 
-FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest@sha256:072cb18c2146f22265a2d7862d37a92665a632060ae6fc0794750f2e7694ffe1 AS builder
+FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go:latest@sha256:7587e9368da2f2abbb2e569e5b4d364b69c4e53bddd735c89ecd63146cd0b6ae AS builder
 
 ARG TARGETARCH
 WORKDIR /src
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w -buildid=" -o /out/kindle-weather .
 
-FROM cgr.dev/chainguard/static:latest@sha256:77d8b8925dc27970ec2f48243f44c7a260d52c49cd778288e4ee97566e0cb75b
+FROM cgr.dev/chainguard/static:latest@sha256:f68e3a8244c7d0f4cd56635aaff8e6a533cf6cc3850d8fb339567a5782d6a0b0
 
 WORKDIR /app
 COPY --from=builder --chown=65532:65532 /out/kindle-weather /app/kindle-weather
