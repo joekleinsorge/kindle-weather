@@ -85,6 +85,14 @@ func TestGetForecastHours(t *testing.T) {
 	}
 }
 
+func TestGetForecastHoursDoesNotDuplicateSparseData(t *testing.T) {
+	now := time.Now()
+	result := getForecastHoursAt([]HourlyWeather{{Dt: now.Add(2 * time.Hour).Unix()}}, now)
+	if len(result) != 1 {
+		t.Fatalf("getForecastHoursAt() returned %d items; want one unique forecast", len(result))
+	}
+}
+
 func TestGetIconClassName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -222,15 +230,15 @@ func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 
 	rendered := string(svg)
 	for _, want := range []string{
-		`viewBox="0 0 600 95"`,
+		`viewBox="0 0 600 125"`,
 		`<path`,
 		` C `,
-		`x="35"`,
-		`x="565"`,
-		`font-size="17" text-anchor="middle" font-weight="bold">L</text>`,
-		`font-size="17" text-anchor="middle" font-weight="bold">H</text>`,
-		`font-size="16" text-anchor="middle" font-weight="bold">3:17 AM</text>`,
-		`font-size="16" text-anchor="middle" font-weight="bold">9:24 AM</text>`,
+		`x="65"`,
+		`x="535"`,
+		`font-size="18" text-anchor="middle" font-weight="bold">LOW</text>`,
+		`font-size="18" text-anchor="middle" font-weight="bold">HIGH</text>`,
+		`font-size="22" text-anchor="middle" font-weight="bold">3:17 AM</text>`,
+		`font-size="22" text-anchor="middle" font-weight="bold">9:24 AM</text>`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("generated tide SVG missing %q: %s", want, rendered)
@@ -248,8 +256,8 @@ func TestPortraitTideChartHeightMatchesViewBox(t *testing.T) {
 	}
 
 	for _, pattern := range []string{
-		`(?s)\.tide-section\s*\{[^}]*height:\s*95px;`,
-		`(?s)\.tide-section svg\s*\{[^}]*height:\s*95px;`,
+		`(?s)\.tide-section\s*\{[^}]*height:\s*125px;`,
+		`(?s)\.tide-section svg\s*\{[^}]*height:\s*125px;`,
 	} {
 		if !regexp.MustCompile(pattern).Match(css) {
 			t.Errorf("portrait tide CSS does not match %q", pattern)
@@ -427,29 +435,14 @@ func renderIndexTemplateWithBeachStatus(t *testing.T, status *BeachStatus) strin
 func renderIndexTemplateData(t *testing.T, launch *LaunchInfo, status *BeachStatus) string {
 	t.Helper()
 
-	data := struct {
-		Weather            WeatherData
-		Tide               TideData
-		TideSVG            template.HTML
-		ForecastHours      []HourlyWeather
-		MoonPhaseIcon      string
-		Horizontal         bool
-		KennedyLaunch      *LaunchInfo
-		BeachStatus        *BeachStatus
-		AutoRefreshSeconds int
-		AutoRefreshURL     string
-	}{
-		Weather: WeatherData{
-			Current: CurrentWeather{
-				Temp:             72,
-				SunriseFormatted: "6:25 AM",
-				SunsetFormatted:  "8:17 PM",
-				Weather:          []WeatherCondition{{Icon: "01d", ID: 800}},
-			},
-			Daily: []DailyWeather{{Summary: "Clear skies"}},
-		},
+	data := DashboardView{
+		CurrentTemperature: "72°",
+		CurrentIconClass:   "wi wi-owm-day-800",
+		Summary:            "Clear skies",
 		TideSVG:            template.HTML(`<svg></svg>`),
 		MoonPhaseIcon:      "wi-moon-full",
+		Sunrise:            "6:25 AM",
+		Sunset:             "8:17 PM",
 		KennedyLaunch:      launch,
 		BeachStatus:        status,
 		AutoRefreshSeconds: 1800,

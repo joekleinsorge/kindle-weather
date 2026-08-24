@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title description"
+     width="{{if .Horizontal}}1024{{else}}758{{end}}" height="{{if .Horizontal}}758{{else}}1024{{end}}"
+     viewBox="0 0 {{if .Horizontal}}1024 758{{else}}758 1024{{end}}">
+  <title id="title">Weather and tide dashboard</title>
+  <description id="description">{{.Summary}}</description>
+  <rect width="100%" height="100%" fill="white"/>
+  <g fill="black" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
+    <text x="50%" y="100" font-size="86" font-weight="bold">{{.CurrentTemperature}}</text>
+    <text x="50%" y="150" font-size="28">{{.Summary}}</text>
+    {{if .BeachStatus}}<text x="50%" y="195" font-size="22" font-weight="bold">{{.BeachStatus.Text}}</text>{{end}}
+    {{if (index .NoticeSlots 0).Text}}<text x="50%" y="230" font-size="19" font-weight="bold">{{(index .NoticeSlots 0).Text}}</text>{{end}}
+    {{if (index .NoticeSlots 1).Text}}<text x="50%" y="255" font-size="19" font-weight="bold">{{(index .NoticeSlots 1).Text}}</text>{{end}}
+    <line x1="35" y1="270" x2="{{if .Horizontal}}989{{else}}723{{end}}" y2="270" stroke="black" stroke-width="4"/>
+    <g font-size="18">
+      <text x="12.5%" y="310">{{(index .ForecastSlots 0).Time}}</text>
+      <text x="12.5%" y="365" font-size="42" font-weight="bold">{{(index .ForecastSlots 0).Temperature}}</text>
+      <text x="12.5%" y="400">{{(index .ForecastSlots 0).Description}}</text>
+      <text x="37.5%" y="310">{{(index .ForecastSlots 1).Time}}</text>
+      <text x="37.5%" y="365" font-size="42" font-weight="bold">{{(index .ForecastSlots 1).Temperature}}</text>
+      <text x="37.5%" y="400">{{(index .ForecastSlots 1).Description}}</text>
+      <text x="62.5%" y="310">{{(index .ForecastSlots 2).Time}}</text>
+      <text x="62.5%" y="365" font-size="42" font-weight="bold">{{(index .ForecastSlots 2).Temperature}}</text>
+      <text x="62.5%" y="400">{{(index .ForecastSlots 2).Description}}</text>
+      <text x="87.5%" y="310">{{(index .ForecastSlots 3).Time}}</text>
+      <text x="87.5%" y="365" font-size="42" font-weight="bold">{{(index .ForecastSlots 3).Temperature}}</text>
+      <text x="87.5%" y="400">{{(index .ForecastSlots 3).Description}}</text>
+    </g>
+    <g transform="translate({{if .Horizontal}}212{{else}}79{{end}}, 500)">{{.TideSVG}}</g>
+    <text x="50%" y="{{if .Horizontal}}685{{else}}945{{end}}" font-size="22">Sunrise {{.Sunrise}} · Sunset {{.Sunset}}</text>
+  </g>
+</svg>

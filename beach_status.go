@@ -17,14 +17,34 @@ type BeachStatus struct {
 }
 
 func getBeachStatus(predictions []TidePrediction, goodSurfToday bool, now time.Time) *BeachStatus {
+	var surfWindow *SurfWindow
+	if goodSurfToday {
+		surfWindow = &SurfWindow{}
+	}
+	return getBeachStatusWithWindow(predictions, surfWindow, now)
+}
+
+func getBeachStatusWithWindow(predictions []TidePrediction, surfWindow *SurfWindow, now time.Time) *BeachStatus {
 	if tide := upcomingSuperLowTide(predictions, now); tide != nil {
 		return &BeachStatus{
 			Kind: "tide",
-			Text: fmt.Sprintf("Super low tide at %s", tide.Time),
+			Text: fmt.Sprintf("Super low tide at %s (%.1f ft)", tide.Time, tide.Height),
 		}
 	}
-	if goodSurfToday {
-		return &BeachStatus{Kind: "surf", Text: "Good surf today"}
+	if surfWindow != nil {
+		if surfWindow.Start.IsZero() {
+			return &BeachStatus{Kind: "surf", Text: "Good surf today"}
+		}
+		return &BeachStatus{
+			Kind: "surf",
+			Text: fmt.Sprintf(
+				"Best surf %s–%s · %.1f ft @ %.0fs",
+				surfWindow.Start.Format("3 PM"),
+				surfWindow.End.Format("3 PM"),
+				surfWindow.WaveHeight,
+				surfWindow.WavePeriod,
+			),
+		}
 	}
 	return nil
 }
