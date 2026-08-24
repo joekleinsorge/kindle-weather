@@ -42,10 +42,10 @@ html, body {
 
 #description {
     position: absolute;
-    top: 24%;
+    top: 21%;
     right: 5%;
     left: 5%;
-    max-height: 17%;
+    max-height: 10%;
     overflow: hidden;
     text-align: center;
     font-size: 2rem;
@@ -56,19 +56,36 @@ html, body {
     margin: 0;
 }
 
-#beach-status {
+#insights {
     position: absolute;
-    top: 40%;
+    top: 31%;
     right: 5%;
     left: 5%;
+    height: 13%;
+    overflow: hidden;
+    text-align: center;
+}
+
+.insight {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     text-align: center;
-    font-size: 1.35rem;
+    min-height: 1.45rem;
+    font-size: 1.05rem;
     font-weight: bold;
-    line-height: 1;
+    line-height: 1.15;
+}
+
+#beach-status {
+    font-size: 1.25rem;
+}
+
+.notice.alert {
+    border: 2px solid #000;
+    margin: 3px auto;
+    max-width: 90%;
 }
 
 .surfboard-icon {
@@ -145,16 +162,16 @@ html, body {
 
 .tide-section {
     position: absolute;
-    top: 82%;
+    top: 80%;
     bottom: auto;
     width: 100%;
-    height: 95px;
+    height: 125px;
     text-align: center;
 }
 
 .tide-section svg {
     width: 92%;
-    height: 95px;
+    height: 125px;
 }
 
 .tide-wave {
@@ -202,19 +219,22 @@ html, body {
     /* margin: 0 25px; */
 }
 
-#moon {
+#footer {
     position: absolute;
+    right: 3.3%;
     bottom: 1%;
     left: 3.3%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1;
+}
+
+#moon {
     font-size: 2rem;
-    /* font-size: 4.3rem; */
 }
 
 #sun {
-    position: absolute;
-    bottom: 1%;
-    right: 3.3%;
-    /* font-size: 4.3rem; */
     font-size: 2rem;
 }
 
@@ -270,7 +290,7 @@ body.horizontal #temp {
 }
 
 body.horizontal #description {
-    top: 22%;
+    top: 19%;
     bottom: auto;
     left: 5%;
     right: 5%;
@@ -279,9 +299,18 @@ body.horizontal #description {
     font-size: 1.5rem;
 }
 
+body.horizontal #insights {
+    top: 30%;
+    height: 13%;
+}
+
+body.horizontal .insight {
+    min-height: 1.2rem;
+    font-size: 0.9rem;
+}
+
 body.horizontal #beach-status {
-    top: 38%;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 body.horizontal #launches {
@@ -322,7 +351,7 @@ body.horizontal .colTime {
 }
 
 body.horizontal .tide-section {
-    top: 73%;
+    top: 72%;
     bottom: auto;
     height: 125px;
 }
@@ -332,14 +361,16 @@ body.horizontal .tide-section svg {
     height: 125px;
 }
 
-body.horizontal #moon {
+body.horizontal #footer {
+    right: 5%;
     bottom: 3%;
     left: 5%;
+}
+
+body.horizontal #moon {
     font-size: 1.6rem;
 }
 
 body.horizontal #sun {
-    bottom: 3%;
-    right: 5%;
     font-size: 1.6rem;
 }

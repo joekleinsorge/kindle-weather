@@ -110,20 +110,33 @@ start_app "/tide"
 curl -fsS "${APP_URL}/" > "${TMPDIR}/page.html"
 curl -fsS "${APP_URL}/css/kindle.css" > "${TMPDIR}/kindle.css"
 curl -fsS "${APP_URL}/metrics" > "${TMPDIR}/metrics.txt"
-assert_contains "${TMPDIR}/page.html" "Weather & Tide"
-assert_contains "${TMPDIR}/page.html" "E2E clear skies"
+curl -fsS "${APP_URL}/dashboard.svg" > "${TMPDIR}/dashboard.svg"
+curl -fsS "${APP_URL}/ready" > "${TMPDIR}/ready.json"
+assert_contains "${TMPDIR}/page.html" "Weather &amp; Tide"
+assert_contains "${TMPDIR}/page.html" "Clear skies"
 assert_contains "${TMPDIR}/page.html" "3:17 AM"
 assert_contains "${TMPDIR}/page.html" "9:24 AM"
 assert_contains "${TMPDIR}/page.html" "id=\"launches\""
+if grep -Fq "Tomorrow" "${TMPDIR}/page.html"; then
+  echo "Expected tomorrow data to remain off the Kindle dashboard" >&2
+  exit 1
+fi
 assert_contains "${TMPDIR}/kindle.css" ".tide-section"
+assert_contains "${TMPDIR}/dashboard.svg" "Weather and tide dashboard"
+assert_contains "${TMPDIR}/dashboard.svg" "Clear skies"
+assert_contains "${TMPDIR}/ready.json" '"status":"ready"'
 assert_contains "${TMPDIR}/metrics.txt" "http_requests_total"
 assert_contains "${TMPDIR}/metrics.txt" 'api_requests_total{api="surf"}'
+if curl -fsS "${APP_URL}/not-a-route" >/dev/null 2>&1; then
+  echo "Expected an unknown route to return an error" >&2
+  exit 1
+fi
 stop_app
 
 start_app "/tide-empty"
 curl -fsS "${APP_URL}/" > "${TMPDIR}/page-no-tide.html"
-assert_contains "${TMPDIR}/page-no-tide.html" "Weather & Tide"
-assert_contains "${TMPDIR}/page-no-tide.html" "E2E clear skies"
+assert_contains "${TMPDIR}/page-no-tide.html" "Weather &amp; Tide"
+assert_contains "${TMPDIR}/page-no-tide.html" "Clear skies"
 assert_contains "${TMPDIR}/page-no-tide.html" "Tide data unavailable"
 stop_app
 

@@ -5,6 +5,7 @@ import json
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 
 def utc_timestamp(offset_seconds=0):
@@ -69,17 +70,31 @@ def weather_payload():
             }],
         },
         "hourly": hourly,
-        "daily": [{
-            "moonrise": now + 1200,
-            "moonset": now + 43200,
-            "moon_phase": 0.5,
-            "summary": "E2E clear skies",
-        }],
+        "daily": [
+            {
+                "dt": now,
+                "moonrise": now + 1200,
+                "moonset": now + 43200,
+                "moon_phase": 0.5,
+                "summary": "Clear skies",
+                "temp": {"min": 68, "max": 82},
+                "pop": 0.12,
+                "uvi": 4,
+            },
+            {
+                "dt": now + 86400,
+                "moon_phase": 0.55,
+                "summary": "Clouds arriving late",
+                "temp": {"min": 69, "max": 84},
+                "pop": 0.35,
+                "uvi": 6,
+            },
+        ],
     }
 
 
 def tide_payload():
-    today = dt.date.today().isoformat()
+    today = dt.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     return {
         "predictions": [
             {"t": f"{today} 03:17", "type": "L", "v": "0.1"},

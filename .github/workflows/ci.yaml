@@ -36,6 +36,11 @@ jobs:
     - name: Run e2e tests
       run: .github/scripts/e2e.sh
 
+    - name: Validate Kubernetes manifests
+      run: >-
+        docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.8.0-alpine
+        -strict -summary -ignore-missing-schemas /work/k8s
+
     - name: Validate Conventional Commit messages
       shell: bash
       run: |

@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: kindle-weather
-        image: ghcr.io/joekleinsorge/kindle-weather/kindle-weather:b3385c1
+        image: ghcr.io/joekleinsorge/kindle-weather/kindle-weather:latest
+        imagePullPolicy: Always
         env:
         - name: CACHE_EXPIRATION
           value: "1800"
@@ -24,29 +25,32 @@ spec:
           value: "3600"
         ports:
         - containerPort: 8080
-        volumeMounts:
-        - name: secrets
-          mountPath: "/app/.secrets"
-          readOnly: true
         resources:
           limits:
             memory: "128Mi"
             cpu: "100m"
           requests:
-            cpu: 250m
-            memory: 256Mi
+            cpu: "25m"
+            memory: "32Mi"
         readinessProbe:
           httpGet:
-            path: /
+            path: /ready
             port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 60
+          initialDelaySeconds: 2
+          periodSeconds: 10
         livenessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 60
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
         volumeMounts:
         - name: secrets
           mountPath: "/etc/secrets"
@@ -55,4 +59,4 @@ spec:
       - name: secrets
         secret:
           secretName: api-keys
-
+      automountServiceAccountToken: false
