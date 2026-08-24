@@ -83,7 +83,7 @@ func TestGetBeachStatus_TideTakesPrecedenceOverSurf(t *testing.T) {
 	predictions := []TidePrediction{{Time: "1:45 PM", Type: "L", Height: -0.2}}
 
 	status := getBeachStatus(predictions, true, now)
-	if status == nil || status.Kind != "tide" || status.Text != "Super low tide at 1:45 PM" {
+	if status == nil || status.Kind != "tide" || status.Text != "Super low tide at 1:45 PM (-0.2 ft)" {
 		t.Fatalf("getBeachStatus() = %+v; want upcoming tide status", status)
 	}
 }

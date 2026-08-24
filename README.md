@@ -11,6 +11,11 @@ A web application that displays weather, tide, moon phase, and space launch info
 - Sunrise and sunset times
 - Upcoming space launches
 - Conditional beach notices for good surf and upcoming daytime super-low tides
+- Best remaining surf window with wave height and period
+- Actionable rain, UV, wind, temperature, and weather-alert notices
+- Internal source-freshness metrics for stale-data monitoring
+- Adaptive refresh timing for overnight hours and approaching events
+- Static SVG dashboard endpoint for screensaver integrations
 - Simple design optimized for Kindle displays
 - Caching for API responses to reduce calls
 - OpenTelemetry tracing (OTLP exporter)
@@ -45,6 +50,9 @@ Optional environment variables:
 - `SURF_API_URL` (defaults to the Open-Meteo Marine API for Crescent Beach)
 - `SURF_CACHE_EXPIRATION` (default: `1800`)
 - `ENABLE_ROCKET_PREVIEW` (default: disabled)
+- `WEATHER_API_URL` (complete OpenWeather-compatible URL; primarily for testing)
+- `NOAA_API_URL` (defaults to Crescent Beach station 8720218)
+- `SPACEDEVS_API_URL` (defaults to Kennedy Space Center launches)
 
 The surf notice uses wave height, period, and direction from Open-Meteo,
 combined with the existing OpenWeather wind forecast. It appears only when a
@@ -58,9 +66,10 @@ both conditions apply.
 
 ## Build
 
-1. Install Go 1.22.3 or later
+1. Install Go 1.26.6 or later
 2. Clone the repository
-3. Create a `.secrets` file with your API keys
+3. Export `OPENWEATHER_API_KEY`, or create a `secrets/openweather-api-key`
+   file containing only the OpenWeather API key
 4. Build the application:
    ```bash
    go build -o kindle-weather
@@ -101,7 +110,7 @@ docker build -t kindle-weather .
 
 # Run the container
 docker run -p 8080:8080 \
-  -v $(pwd)/.secrets:/app/.secrets \
+  -v $(pwd)/secrets:/etc/secrets:ro \
   kindle-weather
 ```
 
@@ -149,7 +158,7 @@ The application includes Kubernetes manifests in the `k8s/` directory:
   - Liveness probe
   - Secret volume mount
   - Single replica
-- `service.yaml` - Creates a ClusterIP service on port 80
+- `svc.yaml` - Creates a ClusterIP service on port 80
 - `ingress.yaml` - Configures external access with:
   - TLS termination
   - Host-based routing
@@ -163,13 +172,13 @@ Deploy to a Kubernetes cluster:
 kubectl create namespace kindle-weather
 kubectl config set-context --current --namespace=kindle-weather
 
-# Apply secrets
-kubectl create secret generic kindle-secrets --from-file=.secrets
-kubectl create secret tls weather-tls --cert=tls.crt --key=tls.key
+# Apply the API key expected by the Deployment
+kubectl create secret generic api-keys \
+  --from-literal=openweather-api-key="$OPENWEATHER_API_KEY"
 
 # Apply the manifests
 kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/svc.yaml
 kubectl apply -f k8s/certificate.yaml
 kubectl apply -f k8s/ingress.yaml
 ```
@@ -190,7 +199,12 @@ kubectl describe deployment kindle-weather
 ## API Endpoints
 
 - `/` - Main weather display page
+- `/dashboard.svg` - Static 758×1024 dashboard (`?h` for 1024×758)
 - `/css/*` - Static CSS files
+- `/font/*` - Weather icon fonts
+- `/health` - Process liveness
+- `/ready` - Runtime readiness
+- `/metrics` - Prometheus metrics
 
 ## License
 
