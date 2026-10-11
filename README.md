@@ -211,3 +211,12 @@ kubectl describe deployment kindle-weather
 MIT License
 
 ![DA231259-8420-4A90-B54E-2B0E3DB98755_1_102_a](https://github.com/user-attachments/assets/004f6d79-ebd4-4341-8600-9a03d612ca20)
+
+### Kindle layout regression tests
+
+Run `npm ci`, then `npx playwright install chromium webkit`, then `npm run test:layout`.
+The suite renders the real Go HTML template, tide SVG, CSS, and icon fonts with deterministic data; no API keys or live weather services are needed.
+
+Chromium and WebKit cover 600×800 and 758×1024 portrait screens plus 1024×758 landscape, with reduced viewport heights of 660, 880, and 600 pixels to reserve space for browser controls. These are CSS viewport assumptions, not identification of a particular Kindle model. Tests include the photographed summary, longer text, wrapped forecast labels, alerts, a launch, and missing optional sections. They assert no row overlap, clipped labels, horizontal overflow, or footer below the screen. CI saves screenshots and traces on failure.
+
+Modern WebKit does not reproduce the Kindle's exact legacy engine or e-ink rendering; this suite catches layout regressions at the target dimensions but does not emulate the physical device.

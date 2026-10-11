@@ -1,10 +1,13 @@
 COMPOSE ?= docker compose
 COMPOSE_FILE ?= docker-compose.yml
 
-.PHONY: test e2e docker-build docker-run docker-stop
+.PHONY: test layout-test e2e docker-build docker-run docker-stop
 
 test:
 	go test ./...
+
+layout-test:
+	npm run test:layout
 
 e2e:
 	.github/scripts/e2e.sh

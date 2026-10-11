@@ -33,6 +33,28 @@ jobs:
     - name: Run unit tests
       run: go test ./...
 
+    - name: Set up Node for layout tests
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+
+    - name: Install layout test dependencies
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium webkit
+
+    - name: Test Kindle layouts
+      run: npm run test:layout
+
+    - name: Upload failed layout screenshots and traces
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: kindle-layout-failures
+        path: test-results/
+        if-no-files-found: ignore
+
     - name: Run e2e tests
       run: .github/scripts/e2e.sh
 

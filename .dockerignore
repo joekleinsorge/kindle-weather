@@ -8,3 +8,6 @@ venv
 kindle-weather
 *.log
 tmp
+node_modules
+test-results
+playwright-report

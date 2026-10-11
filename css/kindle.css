@@ -1,5 +1,4 @@
 html, body {
-    height: 100%;
     margin: 0;
     padding: 0;
     font-family: Arial, Helvetica, sans-serif;
@@ -7,370 +6,99 @@ html, body {
     background: #fff;
 }
 
-#page {
-    position: relative;
-    height: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
+/* Normal document flow prevents long API text from covering another row.
+   Tables and inline blocks also work in the Kindle's older WebKit browser. */
+#page { padding: 12px 0 8px; }
+#current-weather {
+    display: table;
+    table-layout: fixed;
+    width: 90%;
+    margin: 0 auto;
 }
-
-#iconWrapper {
-    position: absolute;
-    left: 5%;
-    /* top: 8.5%; */
-    top: 1%;
+#iconWrapper, .tempWrapper {
+    display: table-cell;
+    vertical-align: middle;
+    width: 50%;
 }
-
-#icon {
-    font-size: 8rem;
-    /* font-size: 35rem; */
-}
-
-.tempWrapper {
-    position: absolute;
-    right: 5%;
-    /* right: 3.3%; */
-    top: 1%;
-    /* top: 10%; */
-}
-
-#temp {
-    font-size: 7rem;
-    /* font-size: 28rem; */
+#icon { font-size: 7rem; line-height: 1.5; }
+.tempWrapper { text-align: right; }
+#temp { font-size: 6.5rem; line-height: 1.1; }
+#launches { margin-top: 8px; font-size: 1rem; font-weight: bold; }
+.rocket-icon {
     display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    vertical-align: middle;
 }
-
+.rocket-icon svg { display: block; width: 100%; height: 100%; fill: #000; }
 #description {
-    position: absolute;
-    top: 21%;
-    right: 5%;
-    left: 5%;
-    max-height: 10%;
-    overflow: hidden;
+    margin: 8px 5% 12px;
     text-align: center;
-    font-size: 2rem;
+    font-size: 1.45rem;
     line-height: 1.2;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
-
-#description p {
-    margin: 0;
-}
-
-#insights {
-    position: absolute;
-    top: 31%;
-    right: 5%;
-    left: 5%;
-    height: 13%;
-    overflow: hidden;
-    text-align: center;
-}
-
-.insight {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    text-align: center;
-    min-height: 1.45rem;
-    font-size: 1.05rem;
-    font-weight: bold;
-    line-height: 1.15;
-}
-
-#beach-status {
-    font-size: 1.25rem;
-}
-
-.notice.alert {
-    border: 2px solid #000;
-    margin: 3px auto;
-    max-width: 90%;
-}
-
+#description p { margin: 0; }
+#insights { margin: 0 5% 12px; text-align: center; }
+.insight { font-size: 1.05rem; font-weight: bold; line-height: 1.3; }
+#beach-status { font-size: 1.15rem; }
+.notice.alert { border: 2px solid #000; margin: 3px auto; padding: 2px 4px; }
 .surfboard-icon {
-    display: block;
+    display: inline-block;
     width: 38px;
     height: 24px;
-    transform: rotate(-8deg);
+    margin-right: 6px;
+    vertical-align: middle;
 }
-
 .surfboard-icon svg {
     display: block;
-    width: 100%;
-    height: 100%;
-    fill: none;
-    stroke: #000;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    width: 100%; height: 100%; fill: none; stroke: #000;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
-
-.surfboard-outline {
-    fill: #fff;
-}
-
+.surfboard-outline { fill: #fff; }
 .forecast {
-    position: absolute;
+    display: table;
+    table-layout: fixed;
     width: 100%;
-    bottom: 20%;
-    /* bottom: 15%; */
-    left: 0;
-    border-top: 5px solid black;
-    border-bottom: 1px solid black;
-    height: 35%;
-    /* height: 25%; */
+    border-top: 3px solid #000;
+    border-bottom: 1px solid #000;
 }
-
 .col {
+    display: table-cell;
     width: 25%;
-    box-sizing: border-box;
-    border-right: 1px solid black;
+    border-right: 1px solid #000;
+    padding: 8px 4px 10px;
     text-align: center;
-    height: 100%;
-    overflow: hidden;
-    float: left;
+    vertical-align: top;
+    word-wrap: break-word;
 }
+.col:last-child { border-right: none; }
+.colTime { font-size: 1rem; white-space: nowrap; }
+.forecastIconWrapper { font-size: 3.2rem; line-height: 1.7; }
+.colTemp { font-size: 2.5rem; line-height: 1.2; }
+.colDesc { margin-top: 4px; font-size: 0.9rem; line-height: 1.2; }
+.tide-section { width: 100%; text-align: center; margin: 4px 0; }
+.tide-section svg { display: block; width: 92%; height: 100px; margin: 0 auto; }
+#footer { display: table; width: 92%; margin: 4px auto 0; line-height: 1.2; }
+#moon, #sun { display: table-cell; vertical-align: middle; }
+#moon { font-size: 1.6rem; }
+#sun { text-align: right; font-size: 1.4rem; white-space: nowrap; }
 
-.col:last-child {
-    border-right: none;
-}
+body.horizontal #icon { font-size: 4.5rem; }
+body.horizontal #temp { font-size: 4.5rem; }
+body.horizontal #description { font-size: 1.2rem; margin-top: 4px; margin-bottom: 8px; }
+body.horizontal #insights { margin-bottom: 8px; }
+body.horizontal .insight { font-size: 0.95rem; }
+body.horizontal .forecastIconWrapper { font-size: 2.3rem; }
+body.horizontal .colTemp { font-size: 2rem; }
+body.horizontal .tide-section svg { height: 85px; }
 
-.colTime {
-    font-size: 1rem;
-    /* font-size: 5rem; */
-    margin-top: 5%;
-}
-
-.forecastIconWrapper {
-    font-size: 4rem;
-    /* font-size: 14.2rem; */
-    /* padding-top: 30px; */
-    padding-top: 5px;
-}
-
-.colTemp {
-    font-size: 3rem;
-    padding-top: 2px;
-    /* font-size: 7.1rem; */
-}
-
-.colDesc {
-    font-size: 1rem;
-    /* font-size: 2.8rem; */
-}
-
-.tide-section {
-    position: absolute;
-    top: 80%;
-    bottom: auto;
-    width: 100%;
-    height: 125px;
-    text-align: center;
-}
-
-.tide-section svg {
-    width: 92%;
-    height: 125px;
-}
-
-.tide-wave {
-    position: relative;
-    width: 100%;
-    height: 40px;
-    border-top: 2px solid black;
-    margin: 20px 0;
-}
-
-.tide-time {
-    position: absolute;
-    font-size: 0.9rem;
-    transform: translateX(-50%);
-}
-
-.tide-time.high {
-    top: -25px;
-}
-
-.tide-time.low {
-    bottom: -25px;
-}
-
-.tide-time::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    width: 2px;
-    height: 10px;
-    background: black;
-    transform: translateX(-50%);
-}
-
-.tide-time.high::before {
-    bottom: -12px;
-}
-
-.tide-time.low::before {
-    top: -12px;
-}
-
-.tide-item {
-    display: inline-block;
-    /* margin: 0 25px; */
-}
-
-#footer {
-    position: absolute;
-    right: 3.3%;
-    bottom: 1%;
-    left: 3.3%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    line-height: 1;
-}
-
-#moon {
-    font-size: 2rem;
-}
-
-#sun {
-    font-size: 2rem;
-}
-
-#launches {
-    position: absolute;
-    top: 145px;
-    right: 5%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1.45rem;
-    font-weight: bold;
-    line-height: 1;
-}
-
-.rocket-icon {
-    display: block;
-    width: 28px;
-    height: 28px;
-}
-
-.rocket-icon svg {
-    width: 100%;
-    height: 100%;
-    fill: #000;
-    display: block;
-}
-
-.launch-time {
-    color: #000;
-}
-
-body.horizontal #page {
-    padding: 0;
-}
-
-body.horizontal #iconWrapper {
-    top: 4%;
-    left: 5%;
-}
-
-body.horizontal #icon {
-    font-size: 6rem;
-}
-
-body.horizontal .tempWrapper {
-    top: 4%;
-    right: 5%;
-}
-
-body.horizontal #temp {
-    font-size: 5.5rem;
-}
-
-body.horizontal #description {
-    top: 19%;
-    bottom: auto;
-    left: 5%;
-    right: 5%;
-    max-height: 15%;
-    text-align: center;
-    font-size: 1.5rem;
-}
-
-body.horizontal #insights {
-    top: 30%;
-    height: 13%;
-}
-
-body.horizontal .insight {
-    min-height: 1.2rem;
-    font-size: 0.9rem;
-}
-
-body.horizontal #beach-status {
-    font-size: 1rem;
-}
-
-body.horizontal #launches {
-    top: 18%;
-    bottom: auto;
-    left: auto;
-    right: 5%;
-    font-size: 1.2rem;
-}
-
-body.horizontal .rocket-icon {
-    width: 24px;
-    height: 24px;
-}
-
-body.horizontal .forecast {
-    top: 44%;
-    bottom: auto;
-    left: 3%;
-    right: 3%;
-    width: auto;
-    height: 28%;
-    border-top-width: 3px;
-    border-bottom-width: 3px;
-}
-
-body.horizontal .forecastIconWrapper {
-    font-size: 3rem;
-}
-
-body.horizontal .colTemp {
-    font-size: 2.3rem;
-}
-
-body.horizontal .colDesc,
-body.horizontal .colTime {
-    font-size: 0.95rem;
-}
-
-body.horizontal .tide-section {
-    top: 72%;
-    bottom: auto;
-    height: 125px;
-}
-
-body.horizontal .tide-section svg {
-    width: 90%;
-    height: 125px;
-}
-
-body.horizontal #footer {
-    right: 5%;
-    bottom: 3%;
-    left: 5%;
-}
-
-body.horizontal #moon {
-    font-size: 1.6rem;
-}
-
-body.horizontal #sun {
-    font-size: 1.6rem;
+/* Browser controls reduce the usable height on the physical device. */
+@media (max-height: 800px) { html { font-size: 14px; } }
+@media (max-height: 650px) {
+    html { font-size: 12px; }
+    #page { padding-top: 6px; }
+    .tide-section svg { height: 80px; }
 }

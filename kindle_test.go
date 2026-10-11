@@ -249,19 +249,13 @@ func TestGenerateTideSVG_CompactLayout(t *testing.T) {
 	}
 }
 
-func TestPortraitTideChartHeightMatchesViewBox(t *testing.T) {
+func TestKindleLayoutUsesDocumentFlow(t *testing.T) {
 	css, err := os.ReadFile("css/kindle.css")
 	if err != nil {
-		t.Fatalf("read Kindle CSS: %v", err)
+		t.Fatal(err)
 	}
-
-	for _, pattern := range []string{
-		`(?s)\.tide-section\s*\{[^}]*height:\s*125px;`,
-		`(?s)\.tide-section svg\s*\{[^}]*height:\s*125px;`,
-	} {
-		if !regexp.MustCompile(pattern).Match(css) {
-			t.Errorf("portrait tide CSS does not match %q", pattern)
-		}
+	if regexp.MustCompile(`position:\s*absolute|overflow:\s*hidden|display:\s*(flex|grid)`).Match(css) {
+		t.Fatal("Kindle rows must flow without clipping or modern layout dependencies")
 	}
 }
 

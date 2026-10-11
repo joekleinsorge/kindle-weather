@@ -1,0 +1,6 @@
+{
+  "name": "kindle-weather-layout-tests",
+  "private": true,
+  "scripts": { "test:layout": "playwright test" },
+  "devDependencies": { "@playwright/test": "1.56.1" }
+}
