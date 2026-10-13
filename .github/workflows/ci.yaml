@@ -49,7 +49,7 @@ jobs:
 
     - name: Upload failed layout screenshots and traces
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: kindle-layout-failures
         path: test-results/
