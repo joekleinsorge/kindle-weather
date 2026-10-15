@@ -17,6 +17,7 @@ A web application that displays weather, tide, moon phase, and space launch info
 - Adaptive refresh timing for overnight hours and approaching events
 - Static SVG dashboard endpoint for screensaver integrations
 - Simple design optimized for Kindle displays
+- Scrollable surf, tide/beach, and hourly rain details with large section links
 - Caching for API responses to reduce calls
 - OpenTelemetry tracing (OTLP exporter)
 
@@ -63,6 +64,23 @@ data is provided by [Open-Meteo](https://open-meteo.com/en/docs/marine-weather-a
 The tide notice appears for the next low tide at or below 0 ft when it is still
 upcoming and falls between 7:00 AM and 7:00 PM. It replaces the surf notice when
 both conditions apply.
+
+## Browsing forecast details
+
+Scroll down from the overview to see surf conditions, tides/beach, and rain
+details, or tap the large Overview / Surf / Tides / Rain links. These are ordinary
+HTML links and tables, designed for the original Paperwhite browser without
+JavaScript or custom swipe gestures. When a section link is used, automatic
+refresh returns to that section. Scrolling alone does not change the selected
+section; refresh returns to the last section selected by a link (the overview by
+default).
+
+Surf details show up to 12 upcoming forecast hours of offshore wave height,
+period, direction, and matching wind forecasts. Tide details show today's NOAA
+high/low predictions and heights relative to MLLW. Rain details show up to 12
+upcoming hours of precipitation probability and hourly amounts in inches.
+The current forecast hour is included. Unavailable optional sources show an
+explicit message, and cached fallback data is labeled with its last update time.
 
 ## Build
 

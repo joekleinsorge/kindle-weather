@@ -6,12 +6,13 @@
     <meta http-equiv="refresh" content="{{.AutoRefreshSeconds}};url={{.AutoRefreshURL}}">
     <meta name="viewport"
           content="{{if .Horizontal}}width=1024, initial-scale=1, maximum-scale=1, user-scalable=no{{else}}width=758, initial-scale=1, maximum-scale=1, user-scalable=no{{end}}">
-    <link rel="stylesheet" href="/css/kindle.css?v=8">
+    <link rel="stylesheet" href="/css/kindle.css?v=9">
     <link rel="stylesheet" href="/css/weather-icons.min.css?v=2">
     <link rel="icon" href="data:,">
 </head>
 <body class="{{if .Horizontal}}horizontal{{end}}">
     <main id="page">
+        <div id="overview">
         <header id="current-weather">
         <div id="iconWrapper" aria-hidden="true">
             <i id="icon" class="{{.CurrentIconClass}}"></i>
@@ -81,6 +82,68 @@
                 <i class="wi wi-sunset" aria-hidden="true"></i> {{.Sunset}}
             </div>
         </footer>
+        {{template "detail-nav" .}}
+        </div>
+
+        <section id="surf" class="detail-section" aria-labelledby="surf-title">
+            <h1 id="surf-title">Surf conditions</h1>
+            <p class="detail-summary">{{if .SurfSummary}}{{.SurfSummary}}{{else}}Surf forecast temporarily unavailable.{{end}}</p>
+            {{if .SurfHours}}
+            <table class="detail-table surf-table">
+                <caption>Upcoming hourly wave and wind forecast</caption>
+                <thead><tr><th scope="col">Time</th><th scope="col">Waves</th><th scope="col">Period</th><th scope="col">From</th><th scope="col">Wind</th></tr></thead>
+                <tbody>{{range .SurfHours}}<tr><th scope="row">{{.Time}}</th><td>{{.Height}}</td><td>{{.Period}}</td><td>{{.Direction}}</td><td>{{.Wind}}</td></tr>{{end}}</tbody>
+            </table>
+            <p class="detail-note">Offshore wave forecast; breaking waves at the beach may differ. Directions show where waves and wind come from.</p>
+            {{end}}
+            <p class="detail-note">Open-Meteo waves · OpenWeather wind{{if .SurfUpdated}}<br>{{.SurfUpdated}}{{end}}</p>
+            {{template "detail-nav" .}}
+        </section>
+
+        <section id="tides" class="detail-section" aria-labelledby="tides-title">
+            <h1 id="tides-title">Tides &amp; beach</h1>
+            <p class="detail-summary">Crescent Beach · Today's high and low tides</p>
+            {{if .TideEvents}}
+            <div class="detail-tide-chart">{{.TideSVG}}</div>
+            <table class="detail-table">
+                <caption>Today's tide times and heights</caption>
+                <thead><tr><th scope="col">Time</th><th scope="col">Tide</th><th scope="col">Height</th></tr></thead>
+                <tbody>{{range .TideEvents}}<tr><th scope="row">{{.Time}}</th><td>{{.Type}}</td><td>{{.Height}}</td></tr>{{end}}</tbody>
+            </table>
+            <p class="detail-note">Heights above mean lower low water (MLLW).</p>
+            {{else}}
+            <p class="detail-summary">Tide predictions temporarily unavailable.</p>
+            {{end}}
+            {{if .BeachStatus}}<p class="detail-summary">{{.BeachStatus.Text}}</p>{{end}}
+            <p class="detail-summary">Sunrise {{.Sunrise}} · Sunset {{.Sunset}}</p>
+            <p class="detail-note">NOAA · Station 8720218{{if .TideUpdated}}<br>{{.TideUpdated}}{{end}}</p>
+            {{template "detail-nav" .}}
+        </section>
+
+        <section id="rain" class="detail-section" aria-labelledby="rain-title">
+            <h1 id="rain-title">Rain forecast</h1>
+            {{if .RainHours}}
+            <table class="detail-table">
+                <caption>Upcoming hourly rain forecast</caption>
+                <thead><tr><th scope="col">Time</th><th scope="col">Chance</th><th scope="col">Amount</th></tr></thead>
+                <tbody>{{range .RainHours}}<tr><th scope="row">{{.Time}}</th><td>{{.Chance}}</td><td>{{.Amount}}</td></tr>{{end}}</tbody>
+            </table>
+            <p class="detail-note">Amounts are forecast totals for each hour, rounded to 0.01 inch.</p>
+            {{else}}
+            <p class="detail-summary">Hourly rain forecast temporarily unavailable.</p>
+            {{end}}
+            <p class="detail-note">OpenWeather{{if .RainUpdated}}<br>{{.RainUpdated}}{{end}}</p>
+            {{template "detail-nav" .}}
+        </section>
     </main>
 </body>
 </html>
+
+{{define "detail-nav"}}
+<nav class="detail-nav" aria-label="Forecast sections">
+    <a href="{{.DetailLinks.overview}}">Overview</a>
+    <a href="{{.DetailLinks.surf}}">Surf</a>
+    <a href="{{.DetailLinks.tides}}">Tides</a>
+    <a href="{{.DetailLinks.rain}}">Rain</a>
+</nav>
+{{end}}

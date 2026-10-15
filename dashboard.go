@@ -70,6 +70,14 @@ type DashboardView struct {
 	BeachStatus        *BeachStatus
 	Notices            []Notice
 	NoticeSlots        [2]Notice
+	DetailLinks        map[string]string
+	SurfHours          []SurfHourView
+	SurfSummary        string
+	TideEvents         []TideEventView
+	RainHours          []RainHourView
+	SurfUpdated        string
+	TideUpdated        string
+	RainUpdated        string
 	Stale              bool
 	AutoRefreshSeconds int
 	AutoRefreshURL     string
@@ -136,6 +144,7 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 		Notices:            buildActionNotices(weather, now),
 		Stale:              snapshot.Weather.Stale || snapshot.Tide.Stale || snapshot.Surf.Stale,
 		AutoRefreshURL:     buildAutoRefreshURL(r, now.Unix()),
+		DetailLinks:        detailLinks(r),
 	}
 
 	if view.Summary == "" {
@@ -166,6 +175,7 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 	surfWindow := bestSurfWindow(snapshot.Surf.Data, weather, now)
 	view.BeachStatus = getBeachStatusWithWindow(snapshot.Tide.Data.Predictions, surfWindow, now)
 	view.AutoRefreshSeconds = int(adaptiveRefreshInterval(snapshot, now).Seconds())
+	populateDetails(&view, snapshot, now)
 	recordSourceAges(snapshot, now)
 	return view
 }

@@ -17,10 +17,12 @@ func TestLayoutFixtureServer(t *testing.T) {
 	mux.Handle("/font/", http.FileServer(http.Dir(".")))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		view := DashboardView{
+			DetailLinks:        detailLinks(r),
+			SurfSummary:        "Best surf today: 9:00 AM–11:00 AM · 3.0 ft at 10 s · wind 8 mph",
 			CurrentTemperature: "99°", CurrentIconClass: "wi wi-day-cloudy",
 			Summary:    "You can expect partly cloudy in the morning, with rain in the afternoon",
 			Horizontal: r.URL.Query().Has("h"), Sunrise: "7:20 AM", Sunset: "7:06 PM",
-			MoonPhaseIcon: "wi-moon-waning-crescent-3", AutoRefreshSeconds: 3600, AutoRefreshURL: r.URL.String(),
+			MoonPhaseIcon: "wi-moon-waning-crescent-3", AutoRefreshSeconds: 3600, AutoRefreshURL: buildAutoRefreshURL(r, 123),
 			KennedyLaunch: &LaunchInfo{Scheduled: "11:53 PM"},
 			BeachStatus:   &BeachStatus{Kind: "surf", Text: "Best surf 9 AM–11 AM · 3.0 ft @ 10s"},
 			Notices:       []Notice{{Text: "Rain likely around 1:00 PM (80%)"}, {Kind: "alert", Text: "Very high UV · use sun protection"}},
@@ -32,6 +34,15 @@ func TestLayoutFixtureServer(t *testing.T) {
 			view.KennedyLaunch = nil
 			view.BeachStatus = nil
 			view.Notices = nil
+		}
+		if !r.URL.Query().Has("minimal") {
+			for i := 0; i < 12; i++ {
+				view.SurfHours = append(view.SurfHours, SurfHourView{Time: "Thu 11 PM", Height: "3.0 ft", Period: "10 s", Direction: "NE", Wind: "12 mph NW"})
+				view.RainHours = append(view.RainHours, RainHourView{Time: "Fri 12 AM", Chance: "100%", Amount: "0.25 in"})
+			}
+			view.TideEvents = []TideEventView{{Time: "4:38 AM", Type: "High", Height: "3.0 ft"}, {Time: "10:25 AM", Type: "Low", Height: "-0.2 ft"}, {Time: "5:13 PM", Type: "High", Height: "3.0 ft"}, {Time: "11:13 PM", Type: "Low", Height: "0.0 ft"}}
+		} else {
+			view.SurfSummary = "Surf forecast temporarily unavailable."
 		}
 		for _, time := range []string{"11:00 AM", "1:00 PM", "3:00 PM", "5:00 PM"} {
 			view.Forecast = append(view.Forecast, ForecastView{Time: time, Temperature: "101°", Description: "heavy intensity rain", IconClass: "wi wi-day-rain"})

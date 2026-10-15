@@ -403,6 +403,7 @@ func buildAutoRefreshURL(r *http.Request, refreshToken int64) string {
 	return (&url.URL{
 		Path:     r.URL.Path,
 		RawQuery: q.Encode(),
+		Fragment: detailSection(q.Get("section")),
 	}).String()
 }
 
@@ -783,7 +784,7 @@ func roundWeatherData(data *WeatherData) {
 		data.Hourly[i].WindSpeed = math.Round(data.Hourly[i].WindSpeed)
 		data.Hourly[i].WindGust = math.Round(data.Hourly[i].WindGust)
 		data.Hourly[i].Pop = math.Round(data.Hourly[i].Pop * 100) // Convert probability to percentage and round
-		data.Hourly[i].Rain.OneH = math.Round(data.Hourly[i].Rain.OneH)
+		// Rain remains in millimeters at full precision; convert when displaying.
 	}
 }
 
