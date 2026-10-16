@@ -58,6 +58,15 @@ type Notice struct {
 type DashboardView struct {
 	CurrentTemperature string
 	CurrentIconClass   string
+	FeelsLike          string
+	NowLabel           string
+	Rain               *RainBand
+	Tide               *TideBand
+	OverviewNotices    []Notice
+	MoonPercent        string
+	MoonName           string
+	SunEventLabel      string
+	SunEventTime       string
 	Summary            string
 	Forecast           []ForecastView
 	ForecastSlots      [4]ForecastView
@@ -174,10 +183,23 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 	view.TideSVG, _ = generateTideSVG(snapshot.Tide.Data.Predictions)
 	surfWindow := bestSurfWindow(snapshot.Surf.Data, weather, now)
 	view.BeachStatus = getBeachStatusWithWindow(snapshot.Tide.Data.Predictions, surfWindow, now)
+	populateOverview(&view, snapshot, now)
 	view.AutoRefreshSeconds = int(adaptiveRefreshInterval(snapshot, now).Seconds())
 	populateDetails(&view, snapshot, now)
 	recordSourceAges(snapshot, now)
 	return view
+}
+
+func populateOverview(view *DashboardView, snapshot DashboardSnapshot, now time.Time) {
+	weather := snapshot.Weather.Data
+	loc := surfLocation(weather)
+	view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
+	view.NowLabel = strings.ToUpper(now.In(loc).Format("Mon 3:04 PM"))
+	view.Rain = buildRainBand(weather.Hourly, now, loc)
+	view.Tide = buildTideBand(snapshot.Tide.Data.Predictions, now, easternLocation())
+	view.OverviewNotices = overviewNotices(view.Notices)
+	view.MoonPercent, view.MoonName = moonDescription(weather.Daily[0].MoonPhase)
+	view.SunEventLabel, view.SunEventTime = nextSunEvent(weather, now, loc)
 }
 
 func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {

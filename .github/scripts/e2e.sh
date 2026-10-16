@@ -117,11 +117,13 @@ assert_contains "${TMPDIR}/page.html" "Clear skies"
 assert_contains "${TMPDIR}/page.html" "3:17 AM"
 assert_contains "${TMPDIR}/page.html" "9:24 AM"
 assert_contains "${TMPDIR}/page.html" "id=\"launches\""
+assert_contains "${TMPDIR}/page.html" "id=\"rain-band\""
+assert_contains "${TMPDIR}/page.html" "id=\"tide-band\""
 if grep -Fq "Tomorrow" "${TMPDIR}/page.html"; then
   echo "Expected tomorrow data to remain off the Kindle dashboard" >&2
   exit 1
 fi
-assert_contains "${TMPDIR}/kindle.css" ".tide-section"
+assert_contains "${TMPDIR}/kindle.css" ".band-big"
 assert_contains "${TMPDIR}/dashboard.svg" "Weather and tide dashboard"
 assert_contains "${TMPDIR}/dashboard.svg" "Clear skies"
 assert_contains "${TMPDIR}/ready.json" '"status":"ready"'

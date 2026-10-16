@@ -4,8 +4,10 @@ A web application that displays weather, tide, moon phase, and space launch info
 
 ## Features
 
-- Current weather conditions with temperature and description
-- 4-hour weather forecast
+- Large-type overview readable from across the room: current temperature and
+  feels-like, when rain starts (or stops) with 12 hourly rain-chance bars, the
+  next high or low tide with today's tide curve, and a good-surf or super-low-tide
+  band when one applies
 - Tide predictions
 - Moon phase display
 - Sunrise and sunset times

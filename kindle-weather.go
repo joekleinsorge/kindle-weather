@@ -155,6 +155,8 @@ type HourlyWeather struct {
 
 type DailyWeather struct {
 	Dt        int64              `json:"dt"`
+	Sunrise   int64              `json:"sunrise"`
+	Sunset    int64              `json:"sunset"`
 	Moonrise  int64              `json:"moonrise"`
 	Moonset   int64              `json:"moonset"`
 	MoonPhase float64            `json:"moon_phase"`

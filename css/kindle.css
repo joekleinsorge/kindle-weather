@@ -6,94 +6,182 @@ html, body {
     background: #fff;
 }
 
-/* Normal document flow prevents long API text from covering another row.
-   Tables and inline blocks also work in the Kindle's older WebKit browser. */
-#page { padding: 12px 0 8px; }
+/* Design 8 ("across the room"): one huge answer per band.
+   Normal document flow and table cells only, so rows never overlap and the
+   Paperwhite's older WebKit lays them out the same as a desktop browser.
+   Everything is sized in rem; the media queries at the bottom scale it. */
+#page { padding: 0 0 8px; }
+#overview { font-family: "Arial Narrow", Arial, Helvetica, sans-serif; }
+
 #current-weather {
     display: table;
     table-layout: fixed;
-    width: 90%;
-    margin: 0 auto;
+    width: 100%;
+    padding: 1.1rem 2.5rem 0.5rem;
+    box-sizing: border-box;
 }
-#iconWrapper, .tempWrapper {
-    display: table-cell;
-    vertical-align: middle;
-    width: 50%;
+.tempWrapper, #now { display: table-cell; vertical-align: middle; }
+.tempWrapper { width: 62%; }
+#temp {
+    font-size: 12rem;
+    font-weight: bold;
+    line-height: 0.85;
+    letter-spacing: -0.04em;
+    white-space: nowrap;
 }
-#icon { font-size: 7rem; line-height: 1.5; }
-.tempWrapper { text-align: right; }
-#temp { font-size: 6.5rem; line-height: 1.1; }
-#launches { margin-top: 8px; font-size: 1rem; font-weight: bold; }
-.rocket-icon {
+#now { text-align: right; }
+#icon { font-size: 4.6rem; line-height: 1.25; }
+#feels { font-size: 2rem; font-weight: bold; line-height: 1.1; }
+#now-time { font-size: 1.15rem; font-weight: bold; letter-spacing: 0.06em; line-height: 1.5; }
+
+.band { padding: 0.8rem 2.5rem 0.9rem; border-bottom: 6px solid #000; }
+.band.inverse { background: #000; color: #fff; border-bottom-color: #000; }
+.band-row { display: table; table-layout: fixed; width: 100%; }
+.band-main, .band-side { display: table-cell; vertical-align: bottom; }
+.band-side { width: 36%; text-align: right; }
+.band-label {
+    font-size: 1.55rem;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+.band-big {
+    font-size: 7.4rem;
+    font-weight: bold;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+.band-suffix { font-size: 3rem; letter-spacing: 0; }
+.band-text { font-size: 2.6rem; font-weight: bold; line-height: 1.15; padding-top: 0.2rem; }
+.band-caption {
+    font-size: 1.4rem;
+    font-weight: bold;
+    line-height: 1.25;
+    padding-top: 0.35rem;
+    white-space: pre-line;
+}
+
+/* Twelve hourly rain-chance bars; inline blocks share a bottom edge. */
+.rain-bars {
+    line-height: 0;
+    font-size: 0;
+    white-space: nowrap;
+    border-bottom: 2px solid #fff;
+}
+.rain-bar {
     display: inline-block;
-    width: 20px;
-    height: 20px;
-    margin-right: 6px;
-    vertical-align: middle;
+    vertical-align: bottom;
+    width: 0.8rem;
+    margin-left: 0.22rem;
+    border: 2px solid #fff;
+    border-bottom: none;
+    box-sizing: border-box;
+    background: #000;
 }
-.rocket-icon svg { display: block; width: 100%; height: 100%; fill: #000; }
-#description {
-    margin: 8px 5% 12px;
-    text-align: center;
-    font-size: 1.45rem;
-    line-height: 1.2;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
+.rain-bars:before {
+    content: "";
+    display: inline-block;
+    vertical-align: bottom;
+    height: 4.3rem;
 }
-#description p { margin: 0; }
-#insights { margin: 0 5% 12px; text-align: center; }
-.insight { font-size: 1.05rem; font-weight: bold; line-height: 1.3; }
-#beach-status { font-size: 1.15rem; }
-.notice.alert { border: 2px solid #000; margin: 3px auto; padding: 2px 4px; }
+.rain-bar.maybe { background: #888; }
+.rain-bar.wet { background: #fff; }
+.rain-bar.h0 { height: 0.3rem; }
+.rain-bar.h1 { height: 0.7rem; }
+.rain-bar.h2 { height: 1.1rem; }
+.rain-bar.h3 { height: 1.5rem; }
+.rain-bar.h4 { height: 1.9rem; }
+.rain-bar.h5 { height: 2.3rem; }
+.rain-bar.h6 { height: 2.7rem; }
+.rain-bar.h7 { height: 3.1rem; }
+.rain-bar.h8 { height: 3.5rem; }
+.rain-bar.h9 { height: 3.9rem; }
+.rain-bar.h10 { height: 4.3rem; }
+
+.tide-spark svg { display: block; width: 13.75rem; height: 4rem; margin-left: auto; }
+
 .surfboard-icon {
     display: inline-block;
-    width: 38px;
-    height: 24px;
-    margin-right: 6px;
-    vertical-align: middle;
+    width: 2.6rem;
+    height: 1.45rem;
+    margin-right: 0.4rem;
+    vertical-align: -0.15rem;
 }
 .surfboard-icon svg {
     display: block;
     width: 100%; height: 100%; fill: none; stroke: #000;
-    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
 }
 .surfboard-outline { fill: #fff; }
-.forecast {
+
+#insights { padding: 0.6rem 2.5rem 0; }
+.insight {
+    display: inline-block;
+    font-size: 1.3rem;
+    font-weight: bold;
+    line-height: 1.3;
+    border: 3px solid #000;
+    padding: 0.2rem 0.6rem;
+    margin: 0 0.4rem 0.3rem 0;
+}
+.notice.alert { background: #000; color: #fff; }
+
+#footer {
     display: table;
     table-layout: fixed;
     width: 100%;
-    border-top: 3px solid #000;
-    border-bottom: 1px solid #000;
+    padding: 1rem 2.5rem 0.4rem;
+    box-sizing: border-box;
 }
-.col {
-    display: table-cell;
-    width: 25%;
-    border-right: 1px solid #000;
-    padding: 8px 4px 10px;
-    text-align: center;
-    vertical-align: top;
-    word-wrap: break-word;
+#moon, #sun, #launch-cell { display: table-cell; vertical-align: middle; white-space: nowrap; }
+#sun { text-align: center; }
+#launch-cell { text-align: right; }
+#moon .wi, #sun .wi { font-size: 2.8rem; vertical-align: middle; margin-right: 0.5rem; }
+.foot-text {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: left;
+    font-size: 1.75rem;
+    font-weight: bold;
+    line-height: 1;
 }
-.col:last-child { border-right: none; }
-.colTime { font-size: 1rem; white-space: nowrap; }
-.forecastIconWrapper { font-size: 3.2rem; line-height: 1.7; }
-.colTemp { font-size: 2.5rem; line-height: 1.2; }
-.colDesc { margin-top: 4px; font-size: 0.9rem; line-height: 1.2; }
-.tide-section { width: 100%; text-align: center; margin: 4px 0; }
-.tide-section svg { display: block; width: 92%; height: 100px; margin: 0 auto; }
-#footer { display: table; width: 92%; margin: 4px auto 0; line-height: 1.2; }
-#moon, #sun { display: table-cell; vertical-align: middle; }
-#moon { font-size: 1.6rem; }
-#sun { text-align: right; font-size: 1.4rem; white-space: nowrap; }
+.foot-sub { display: block; font-size: 1.1rem; font-weight: normal; padding-top: 0.15rem; }
+.rocket-icon {
+    display: inline-block;
+    width: 2.6rem;
+    height: 2.6rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+.rocket-icon svg { display: block; width: 100%; height: 100%; fill: #000; }
 
-body.horizontal #icon { font-size: 4.5rem; }
-body.horizontal #temp { font-size: 4.5rem; }
-body.horizontal #description { font-size: 1.2rem; margin-top: 4px; margin-bottom: 8px; }
-body.horizontal #insights { margin-bottom: 8px; }
-body.horizontal .insight { font-size: 0.95rem; }
-body.horizontal .forecastIconWrapper { font-size: 2.3rem; }
-body.horizontal .colTemp { font-size: 2rem; }
-body.horizontal .tide-section svg { height: 85px; }
+/* Landscape: header across the top, bands two per row. */
+body.horizontal #temp { font-size: 7.5rem; }
+body.horizontal #current-weather { padding-top: 0.6rem; }
+body.horizontal #icon { font-size: 3.4rem; line-height: 1.1; }
+body.horizontal .band {
+    float: left;
+    width: 50%;
+    box-sizing: border-box;
+    padding: 0.6rem 1.5rem 0.7rem;
+    border-bottom: none;
+    border-top: 6px solid #000;
+}
+body.horizontal .band-big { font-size: 5.2rem; }
+body.horizontal .band-suffix { font-size: 2.2rem; }
+body.horizontal .band-label { font-size: 1.2rem; }
+body.horizontal .band-caption { font-size: 1.15rem; }
+body.horizontal .band-side { width: 45%; }
+body.horizontal .tide-spark svg { width: 10.5rem; height: 3rem; }
+body.horizontal .rain-bars:before { height: 3.3rem; }
+body.horizontal .rain-bar { width: 0.6rem; margin-left: 0.15rem; }
+body.horizontal #insights, body.horizontal #footer { clear: both; }
+body.horizontal #footer { border-top: 6px solid #000; padding-top: 0.6rem; }
+
+/* Detail sections: the original tide chart lives on the Tides page. */
+.tide-section svg, .detail-tide-chart svg { display: block; width: 100%; height: auto; }
 
 /* Plain document scrolling and links work in the original Paperwhite browser.
    Avoid nested scroll areas, touch handlers, fixed positioning and animation. */
@@ -143,10 +231,9 @@ body.horizontal .tide-section svg { height: 85px; }
 .detail-tide-chart svg { display: block; width: 100%; height: auto; margin: 16px auto; }
 .detail-section .detail-nav { width: 100%; margin-top: 24px; }
 
-/* Browser controls reduce the usable height on the physical device. */
+/* Browser controls reduce the usable height on the physical device, and the
+   original 600 px Kindle needs everything a size smaller. */
 @media (max-height: 800px) { html { font-size: 14px; } }
-@media (max-height: 650px) {
-    html { font-size: 12px; }
-    #page { padding-top: 6px; }
-    .tide-section svg { height: 80px; }
-}
+@media (max-height: 650px) { html { font-size: 12px; } }
+@media (max-width: 700px) { html { font-size: 12.5px; } }
+@media (max-width: 700px) and (max-height: 700px) { html { font-size: 11px; } }

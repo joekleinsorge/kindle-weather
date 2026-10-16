@@ -7,19 +7,24 @@ for (const scenario of ['', 'long', 'minimal']) {
     await page.evaluate(() => document.fonts.ready);
     const problems = await page.evaluate(() => {
       const errors = [];
-      const rows = ['#current-weather', '#description', '#insights', '.forecast', '.tide-section', '#footer'];
-      let bottom = 0;
-      for (const selector of rows) {
-        const element = document.querySelector(selector);
-        const box = element.getBoundingClientRect();
-        if (box.top < bottom - 1) errors.push(`${selector} overlaps previous row`);
-        bottom = box.bottom;
+      // Bands may sit side by side in landscape, so check every pair of rows.
+      const rows = ['#current-weather', '#rain-band', '#tide-band', '#beach-status', '#insights', '#footer']
+        .map(selector => [selector, document.querySelector(selector)])
+        .filter(([, element]) => element)
+        .map(([selector, element]) => [selector, element.getBoundingClientRect()]);
+      for (let i = 0; i < rows.length; i++) {
+        for (let j = i + 1; j < rows.length; j++) {
+          const [a, A] = rows[i], [b, B] = rows[j];
+          if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1)
+            errors.push(`${b} overlaps ${a}`);
+        }
       }
-      if (bottom > innerHeight) errors.push(`footer ends at ${bottom}, viewport ends at ${innerHeight}`);
+      const bottom = Math.max(...rows.map(([, box]) => box.bottom));
+      if (bottom > innerHeight) errors.push(`overview ends at ${bottom}, viewport ends at ${innerHeight}`);
       if (document.documentElement.scrollWidth > innerWidth) errors.push('horizontal overflow');
       // Check individual labels as well as row boxes: clipped text can fit inside a broken row.
-      for (const element of document.querySelectorAll('.col, #description, .insight, #sun, #launches')) {
-        if (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
+      for (const element of document.querySelectorAll('#temp, #now, .band-main, .band-side, .band-label, .band-big, .band-caption, .band-text, .insight, #moon, #sun, #launch-cell')) {
+        if (element.scrollWidth > element.clientWidth + 1)
           errors.push(`clipped content: ${element.className || element.id}`);
       }
       const temp = document.querySelector('#temp').getBoundingClientRect();
