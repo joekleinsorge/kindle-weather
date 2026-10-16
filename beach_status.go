@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -14,6 +15,11 @@ const (
 type BeachStatus struct {
 	Kind string
 	Text string
+	// Large-type parts for the overview band. Text stays the one-line summary.
+	Label  string
+	Big    string
+	Suffix string
+	Detail string
 }
 
 func getBeachStatus(predictions []TidePrediction, goodSurfToday bool, now time.Time) *BeachStatus {
@@ -26,16 +32,21 @@ func getBeachStatus(predictions []TidePrediction, goodSurfToday bool, now time.T
 
 func getBeachStatusWithWindow(predictions []TidePrediction, surfWindow *SurfWindow, now time.Time) *BeachStatus {
 	if tide := upcomingSuperLowTide(predictions, now); tide != nil {
+		big, suffix, _ := strings.Cut(tide.Time, " ")
 		return &BeachStatus{
-			Kind: "tide",
-			Text: fmt.Sprintf("Super low tide at %s (%.1f ft)", tide.Time, tide.Height),
+			Kind:   "tide",
+			Text:   fmt.Sprintf("Super low tide at %s (%.1f ft)", tide.Time, tide.Height),
+			Label:  "SUPER LOW TIDE",
+			Big:    big,
+			Suffix: suffix,
+			Detail: fmt.Sprintf("%.1f ft", tide.Height),
 		}
 	}
 	if surfWindow != nil {
 		if surfWindow.Start.IsZero() {
 			return &BeachStatus{Kind: "surf", Text: "Good surf today"}
 		}
-		return &BeachStatus{
+		status := &BeachStatus{
 			Kind: "surf",
 			Text: fmt.Sprintf(
 				"Best surf %s–%s · %.1f ft @ %.0fs",
@@ -44,7 +55,18 @@ func getBeachStatusWithWindow(predictions []TidePrediction, surfWindow *SurfWind
 				surfWindow.WaveHeight,
 				surfWindow.WavePeriod,
 			),
+			Detail: fmt.Sprintf("%.1f ft @ %.0f s\nwind %.0f mph", surfWindow.WaveHeight, surfWindow.WavePeriod, surfWindow.WindSpeed),
 		}
+		if !surfWindow.Start.After(now) {
+			status.Label = "GOOD SURF UNTIL"
+			status.Big, status.Suffix = hourParts(surfWindow.End)
+		} else {
+			// Whole hours keep the range short enough for the big type: "7–11 AM".
+			status.Label = "GOOD SURF TODAY"
+			status.Big = surfWindow.Start.Format("3") + "–" + surfWindow.End.Format("3")
+			status.Suffix = surfWindow.End.Format("PM")
+		}
+		return status
 	}
 	return nil
 }
