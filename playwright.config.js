@@ -4,6 +4,7 @@ const { defineConfig } = require('@playwright/test');
 const screens = [
   ['kindle-600-full', 600, 800],
   ['kindle-600-toolbar', 600, 660],
+  ['paperwhite1-compact-toolbar', 758, 700],
   ['paperwhite-full', 758, 1024],
   ['paperwhite-toolbar', 758, 880],
   ['landscape-full', 1024, 758],

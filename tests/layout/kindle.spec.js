@@ -1,5 +1,44 @@
 const { test, expect } = require('@playwright/test');
 
+for (const scenario of ['paperwhite1', 'paperwhite1&wide-time']) {
+  test(`2012 Paperwhite tide text stays clear of chart: ${scenario}`, async ({ browser }, testInfo) => {
+    const landscape = testInfo.project.name.includes('landscape');
+    const context = await browser.newContext({ javaScriptEnabled: false, viewport: testInfo.project.use.viewport });
+    const page = await context.newPage();
+    const failedAssets = [];
+    page.on('response', response => {
+      if (['stylesheet', 'font'].includes(response.request().resourceType()) && response.status() !== 200)
+        failedAssets.push(`${response.status()} ${response.url()}`);
+    });
+    const response = await page.goto(`/?${landscape ? 'h&' : ''}${scenario}`);
+    expect(response.status()).toBe(200);
+    await page.evaluate(() => document.fonts.ready);
+    const problems = await page.evaluate(() => {
+      const errors = [];
+      const time = document.querySelector('#tide-band .band-big');
+      const range = document.createRange();
+      range.selectNodeContents(time);
+      const text = range.getBoundingClientRect();
+      const side = document.querySelector('#tide-band .band-side').getBoundingClientRect();
+      if (text.right > side.left - 4) errors.push('tide time touches chart/caption column');
+      const spark = document.querySelector('.tide-spark').getBoundingClientRect();
+      const caption = document.querySelector('#tide-band .band-caption').getBoundingClientRect();
+      if (spark.bottom > caption.top + 1) errors.push('tide chart overlaps caption');
+      for (const element of document.querySelectorAll('#tide-band .band-main, #tide-band .band-side, #tide-band .band-caption, .rain-bars')) {
+        if (element.scrollWidth > element.clientWidth + 1) errors.push(`horizontal overflow in ${element.className}`);
+      }
+      if (document.documentElement.scrollWidth > innerWidth) errors.push('page overflows horizontally');
+      if (document.querySelectorAll('script').length) errors.push('dashboard requires JavaScript');
+      return errors;
+    });
+    expect(problems).toEqual([]);
+    expect(failedAssets).toEqual([]);
+    await expect(page.locator('#tide-band .band-big')).toContainText(scenario.includes('wide-time') ? '12:59' : '7:32');
+    await page.screenshot({ path: testInfo.outputPath('paperwhite1.png'), fullPage: false });
+    await context.close();
+  });
+}
+
 for (const scenario of ['', 'long', 'minimal']) {
   test(`Kindle layout fits: ${scenario || 'photo summary'}`, async ({ page }, testInfo) => {
     const landscape = testInfo.project.name.includes('landscape');

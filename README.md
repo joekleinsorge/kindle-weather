@@ -101,6 +101,15 @@ explicit message, and cached fallback data is labeled with its last update time.
 
 ## Testing
 
+The 2012 Kindle Paperwhite (5th generation, firmware 5.6.1.1) is a supported
+layout target. Browser CI checks portrait and landscape viewports, reduced
+heights for the browser toolbar, the photographed 7:32 PM tide row, and wider
+12:59 PM times. Tests check that tide text stays clear of the chart and caption,
+assets load, and forecast navigation works without JavaScript. Text autosizing
+is disabled to keep older WebKit from expanding text beyond its table cells.
+Modern WebKit is an approximation; changes to layout should also be checked on
+the physical Kindle using Freshlab's LAN-only HTTP endpoint.
+
 Run unit tests:
 
 ```bash

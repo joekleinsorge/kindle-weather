@@ -48,6 +48,24 @@ func TestLayoutFixtureServer(t *testing.T) {
 		view.Tide = buildTideBand(tides, now, loc)
 		view.MoonPercent, view.MoonName = moonDescription(0.9)
 		view.SunEventLabel, view.SunEventTime = "sunset", "7:06"
+		if r.URL.Query().Has("paperwhite1") {
+			// The physical 2012 Paperwhite photo exposed a time/caption collision.
+			view.CurrentTemperature = "82°"
+			view.FeelsLike, view.NowLabel = "87", "FRI 5:47 PM"
+			view.Rain.Big, view.Rain.Suffix, view.Rain.Caption = "Dry", "", "no rain expected"
+			view.Rain.Label = "NEXT 12 HOURS"
+			for i := range view.Rain.Bars {
+				view.Rain.Bars[i] = RainBar{Level: "dry"}
+			}
+			view.Tide.Label, view.Tide.Big, view.Tide.Suffix = "LOW TIDE · FALLING", "7:32", "PM"
+			view.Tide.Caption = "in 1½ hrs · high 1:44a"
+			if r.URL.Query().Has("wide-time") {
+				view.Tide.Big = "12:59"
+				view.Tide.Caption = "in about 12½ hrs · high 12:59p"
+			}
+			view.BeachStatus, view.KennedyLaunch = nil, nil
+			view.Notices = []Notice{{Kind: "alert", Text: "Gale Warning"}, {Text: "High UV today (7)"}}
+		}
 		if r.URL.Query().Has("long") {
 			// Worst case: widest temperature, a fallback text band, and two alerts.
 			view.CurrentTemperature = "104°"

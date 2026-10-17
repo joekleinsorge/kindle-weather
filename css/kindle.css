@@ -1,4 +1,7 @@
 html, body {
+    /* Prevent old Kindle WebKit from enlarging text independently of its cell. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     margin: 0;
     padding: 0;
     font-family: Arial, Helvetica, sans-serif;
@@ -11,7 +14,7 @@ html, body {
    Paperwhite's older WebKit lays them out the same as a desktop browser.
    Everything is sized in rem; the media queries at the bottom scale it. */
 #page { padding: 0 0 8px; }
-#overview { font-family: "Arial Narrow", Arial, Helvetica, sans-serif; }
+#overview { font-family: Arial, Helvetica, sans-serif; }
 
 #current-weather {
     display: table;
@@ -100,7 +103,13 @@ html, body {
 .rain-bar.h9 { height: 3.9rem; }
 .rain-bar.h10 { height: 4.3rem; }
 
-.tide-spark svg { display: block; width: 13.75rem; height: 4rem; margin-left: auto; }
+.tide-spark svg { display: block; width: 100%; max-width: 13.75rem; height: 4rem; margin-left: auto; }
+
+/* Keep the large tide time inside its table cell on the narrow Kindle screen. */
+#tide-band .band-main { width: 60%; }
+#tide-band .band-side { width: 40%; }
+#tide-band .band-big { font-size: 6rem; }
+#tide-band .band-suffix { font-size: 2.25rem; }
 
 .surfboard-icon {
     display: inline-block;
@@ -234,6 +243,6 @@ body.horizontal #footer { border-top: 6px solid #000; padding-top: 0.6rem; }
 /* Browser controls reduce the usable height on the physical device, and the
    original 600 px Kindle needs everything a size smaller. */
 @media (max-height: 800px) { html { font-size: 14px; } }
-@media (max-height: 650px) { html { font-size: 12px; } }
+@media (max-height: 750px) { html { font-size: 12px; } }
 @media (max-width: 700px) { html { font-size: 12.5px; } }
 @media (max-width: 700px) and (max-height: 700px) { html { font-size: 11px; } }
