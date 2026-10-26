@@ -95,6 +95,7 @@ func layoutFixtureHandler(t *testing.T) http.Handler {
 			view.FeelsLike, view.NowLabel = "87", "FRI 5:47 PM"
 			view.Rain.Big, view.Rain.Suffix, view.Rain.Caption = "Dry", "", "no rain expected"
 			view.Rain.Label, view.Rain.Likely = "NEXT 12 HOURS", false
+			view.Rain.StartLabel, view.Rain.EndLabel = "5p", "4a"
 			view.WeatherUpdated = "Updated Fri 5:40 PM"
 			view.DailyRange = "High 86° · Low 74°"
 			view.Forecast = nil

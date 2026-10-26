@@ -94,6 +94,12 @@ html, body {
 .rocket-icon { display: inline-block; width: 2rem; height: 2rem; margin-right: 0.4rem; vertical-align: middle; }
 .rocket-icon svg { display: block; width: 100%; height: 100%; fill: #000; }
 .weather-updated { margin: 0; text-align: center; font-size: 0.85rem; }
+/* Without a beach band, spread the remaining rows instead of leaving a blank bottom. */
+.roomy #current-weather { padding-top: 1.2rem; padding-bottom: 1.2rem; }
+.roomy #day-ahead { padding-top: 0.9rem; padding-bottom: 1rem; }
+.roomy .band { padding-top: 1.3rem; padding-bottom: 1.4rem; }
+body.horizontal .roomy #current-weather { padding-top: 1rem; padding-bottom: 1rem; }
+body.horizontal .roomy .band { padding-top: 0.9rem; padding-bottom: 1rem; }
 /* Landscape keeps all three answers in aligned full-width rows. */
 body.horizontal #current-weather { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 body.horizontal #temp { font-size: 5.5rem; }
