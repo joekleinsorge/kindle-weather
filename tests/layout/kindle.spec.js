@@ -39,7 +39,7 @@ for (const scenario of ['paperwhite1', 'paperwhite1&wide-time']) {
   });
 }
 
-for (const scenario of ['', 'long', 'minimal']) {
+for (const scenario of ['', 'long', 'minimal', 'possible', 'stale']) {
   test(`Kindle layout fits: ${scenario || 'photo summary'}`, async ({ page }, testInfo) => {
     const landscape = testInfo.project.name.includes('landscape');
     await page.goto(`/?${landscape ? 'h&' : ''}${scenario}`);
@@ -47,7 +47,7 @@ for (const scenario of ['', 'long', 'minimal']) {
     const problems = await page.evaluate(() => {
       const errors = [];
       // Bands may sit side by side in landscape, so check every pair of rows.
-      const rows = ['#current-weather', '#rain-band', '#tide-band', '#beach-status', '#insights', '#footer']
+      const rows = ['#masthead', '#current-weather', '#day-ahead', '#rain-band', '#tide-band', '#beach-status', '#insights', '#footer']
         .map(selector => [selector, document.querySelector(selector)])
         .filter(([, element]) => element)
         .map(([selector, element]) => [selector, element.getBoundingClientRect()]);
@@ -58,7 +58,7 @@ for (const scenario of ['', 'long', 'minimal']) {
             errors.push(`${b} overlaps ${a}`);
         }
       }
-      const bottom = Math.max(...rows.map(([, box]) => box.bottom));
+      const bottom = document.querySelector('#overview').getBoundingClientRect().bottom;
       if (bottom > innerHeight) errors.push(`overview ends at ${bottom}, viewport ends at ${innerHeight}`);
       if (document.documentElement.scrollWidth > innerWidth) errors.push('horizontal overflow');
       // Check individual labels as well as row boxes: clipped text can fit inside a broken row.
@@ -106,4 +106,47 @@ test('detail tables stay readable within the page width', async ({ page }) => {
     return errors;
   });
   expect(problems).toEqual([]);
+});
+
+test('overview context and navigation fit on screen', async ({ page }, testInfo) => {
+  const landscape = testInfo.project.name.includes('landscape');
+  await page.goto(`/?${landscape ? 'h&' : ''}`);
+  await expect(page.locator('#condition')).toHaveText('Partly cloudy');
+  await expect(page.locator('#day-ahead .forecast-hour')).toHaveCount(4);
+  await expect(page.locator('#overview nav a[aria-current="page"]')).toHaveText('Overview');
+  expect(await page.locator('#insights').evaluate(el => el.getBoundingClientRect().bottom))
+    .toBeLessThanOrEqual(await page.locator('#current-weather').evaluate(el => el.getBoundingClientRect().top));
+  await expect(page.locator('#daily-range')).toHaveText('High 91° · Low 76°');
+  await expect(page.locator('.weather-updated')).toHaveText('Updated Thu 8:20 AM');
+  const box = await page.locator('#overview').boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(testInfo.project.use.viewport.height);
+  await expect(page.locator('#rain-band .chart-axis')).toContainText('8a');
+  await expect(page.locator('#tide-band .chart-axis')).toContainText('12p');
+});
+
+test('large panels open details without JavaScript', async ({ browser }, testInfo) => {
+  const landscape = testInfo.project.name.includes('landscape');
+  const context = await browser.newContext({ javaScriptEnabled: false, viewport: testInfo.project.use.viewport });
+  const page = await context.newPage();
+  for (const [panel, section] of [['rain-band', 'rain'], ['tide-band', 'tides'], ['beach-status', 'surf']]) {
+    await page.goto(`/?${landscape ? 'h&' : ''}`);
+    await page.locator(`#${panel} .band-link`).click();
+    await expect(page).toHaveURL(new RegExp(`section=${section}#${section}$`));
+    if (landscape) expect(new URL(page.url()).searchParams.has('h')).toBeTruthy();
+  }
+  await context.close();
+});
+
+test('solid black marks only likely rain and cached weather', async ({ page }, testInfo) => {
+  const prefix = testInfo.project.name.includes('landscape') ? 'h&' : '';
+  await page.goto(`/?${prefix}`);
+  await expect(page.locator('#rain-band')).toHaveClass(/inverse/);
+  await expect(page.locator('#day-ahead .forecast-condition')).toHaveCount(0);
+  await expect(page.locator('#surf tr.best')).toHaveCount(2);
+  await page.goto(`/?${prefix}paperwhite1`);
+  await expect(page.locator('#rain-band')).toHaveClass(/calm/);
+  await page.goto(`/?${prefix}stale`);
+  await expect(page.locator('.data-status')).toHaveText('Weather from Thu 4:05 AM · updates unavailable');
+  await expect(page.locator('#current-weather')).toHaveClass(/stale/);
+  await expect(page.locator('#feels')).toHaveText('as of 4:05 AM');
 });

@@ -9,6 +9,7 @@ import (
 
 type SurfHourView struct {
 	Time, Height, Period, Direction, Wind string
+	Best                                  bool
 }
 
 type RainHourView struct {
@@ -47,6 +48,7 @@ func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.T
 	// Include the current forecast hour, even partway through it.
 	start := now.Truncate(time.Hour)
 	hourly := snapshot.Surf.Data.Hourly
+	window := bestSurfWindow(snapshot.Surf.Data, weather, now)
 	for i := 0; i < usableSurfHours(hourly) && len(view.SurfHours) < 12; i++ {
 		t := time.Unix(hourly.Time[i], 0)
 		if t.Before(start) {
@@ -59,12 +61,14 @@ func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.T
 		view.SurfHours = append(view.SurfHours, SurfHourView{
 			Time: t.In(loc).Format("Mon 3 PM"), Height: fmt.Sprintf("%.1f ft", hourly.WaveHeight[i]),
 			Period: fmt.Sprintf("%.0f s", hourly.WavePeriod[i]), Direction: compassDirection(hourly.WaveDirection[i]), Wind: wind,
+			Best: window != nil && !t.Before(window.Start) && t.Before(window.End),
 		})
+		view.SurfBestShown = view.SurfBestShown || view.SurfHours[len(view.SurfHours)-1].Best
 	}
 	view.SurfSummary = "Surf forecast temporarily unavailable."
 	if len(view.SurfHours) > 0 {
 		view.SurfSummary = "No remaining daylight surf window matches your preferences today."
-		if window := bestSurfWindow(snapshot.Surf.Data, weather, now); window != nil {
+		if window != nil {
 			view.SurfSummary = fmt.Sprintf("Best surf today: %s–%s · %.1f ft at %.0f s · wind %.0f mph",
 				window.Start.Format("3:04 PM"), window.End.Format("3:04 PM"), window.WaveHeight, window.WavePeriod, window.WindSpeed)
 		}
@@ -107,4 +111,11 @@ func detailUpdated(fetchedAt time.Time, stale bool, loc *time.Location) string {
 		text += " · cached data; refresh unavailable"
 	}
 	return text
+}
+
+func selectedSection(r *http.Request) string {
+	if section := detailSection(r.URL.Query().Get("section")); section != "" {
+		return section
+	}
+	return "overview"
 }

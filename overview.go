@@ -28,11 +28,14 @@ type RainBar struct {
 }
 
 type RainBand struct {
-	Label   string
-	Big     string
-	Suffix  string
-	Caption string
-	Bars    []RainBar
+	Label      string
+	Big        string
+	Suffix     string
+	Caption    string
+	Bars       []RainBar
+	Likely     bool // rain is likely within the window; only then is the band drawn in solid black
+	StartLabel string
+	EndLabel   string
 }
 
 type TideBand struct {
@@ -65,7 +68,7 @@ func buildRainBand(hourly []HourlyWeather, now time.Time, loc *time.Location) *R
 		return nil
 	}
 
-	band := &RainBand{}
+	band := &RainBand{StartLabel: shortClock(time.Unix(hours[0].Dt, 0).In(loc)), EndLabel: shortClock(time.Unix(hours[len(hours)-1].Dt, 0).In(loc))}
 	wet := func(h HourlyWeather) bool { return h.Pop >= rainLikelyPercent || h.Rain.OneH > 0 }
 	startIdx, peakIdx := -1, 0
 	for i, hour := range hours {
@@ -87,15 +90,20 @@ func buildRainBand(hourly []HourlyWeather, now time.Time, loc *time.Location) *R
 	}
 
 	if startIdx < 0 {
-		band.Label = "NEXT 12 HOURS"
+		band.Label = fmt.Sprintf("NEXT %d HOURS", len(hours))
 		band.Big = "Dry"
 		band.Caption = "no rain expected"
 		if peak := hours[peakIdx].Pop; peak > 0 {
 			band.Caption = fmt.Sprintf("%.0f%% at most", peak)
+			if peak >= rainMaybePercent {
+				band.Big = "Possible"
+				band.Caption = fmt.Sprintf("%.0f%% at %s", peak, shortClock(time.Unix(hours[peakIdx].Dt, 0).In(loc)))
+			}
 		}
 		return band
 	}
 
+	band.Likely = true
 	endIdx := -1
 	peakIdx = startIdx
 	for i := startIdx; i < len(hours); i++ {
@@ -113,9 +121,10 @@ func buildRainBand(hourly []HourlyWeather, now time.Time, loc *time.Location) *R
 
 	if !startTime.After(now) {
 		// Raining (or very likely) in the current hour: the useful answer is when it stops.
-		band.Label = "RAIN UNTIL"
+		band.Label = "RAIN LIKELY UNTIL"
 		if endIdx < 0 {
-			band.Big, band.Suffix = "12+", "HRS"
+			band.Big, band.Suffix = hourParts(lastTime)
+			band.Label = "RAIN LIKELY THROUGH"
 			band.Caption = peak
 			return band
 		}
@@ -124,12 +133,12 @@ func buildRainBand(hourly []HourlyWeather, now time.Time, loc *time.Location) *R
 		return band
 	}
 
-	band.Label = "RAIN STARTS"
+	band.Label = "RAIN LIKELY FROM"
 	band.Big, band.Suffix = hourParts(startTime)
 	if endIdx < 0 {
 		band.Caption = fmt.Sprintf("%s · past %s", peak, shortClock(lastTime))
 	} else {
-		band.Caption = fmt.Sprintf("%s · dry by %s", peak, shortClock(time.Unix(hours[endIdx].Dt, 0).In(loc)))
+		band.Caption = fmt.Sprintf("%s · easing %s", peak, shortClock(time.Unix(hours[endIdx].Dt, 0).In(loc)))
 	}
 	return band
 }
@@ -153,13 +162,18 @@ func buildTideBand(predictions []TidePrediction, now time.Time, loc *time.Locati
 	band.Caption = untilText(next.Time.Sub(now))
 	if estimated {
 		band.Caption = strings.Replace(band.Caption, "in ", "in about ", 1)
+		band.Label = "EST. " + band.Label
 	}
 	if following != nil {
 		kind := "low"
 		if following.Type == "H" {
 			kind = "high"
 		}
-		band.Caption += fmt.Sprintf(" · %s %s", kind, shortClock(following.Time))
+		marker := ""
+		if estimated || !containsTideEvent(events, following.Time) {
+			marker = "~"
+		}
+		band.Caption += fmt.Sprintf(" · %s %s%s", kind, marker, shortClock(following.Time))
 	}
 	band.Spark = tideSparkline(events, now, loc)
 	return band
@@ -186,7 +200,19 @@ func parseTideEvents(predictions []TidePrediction, now time.Time, loc *time.Loca
 // nextTideEvents returns the next tide after now and the one after it. NOAA is
 // queried for today only, so after the last tide of the day the next ones are
 // estimated from the average half tidal cycle.
+func containsTideEvent(events []tideEvent, t time.Time) bool {
+	for _, event := range events {
+		if event.Time.Equal(t) {
+			return true
+		}
+	}
+	return false
+}
+
 func nextTideEvents(events []tideEvent, now time.Time) (*tideEvent, *tideEvent, bool) {
+	if len(events) == 0 {
+		return nil, nil, false
+	}
 	for i := range events {
 		if events[i].Time.After(now) {
 			if i+1 < len(events) {
@@ -221,7 +247,8 @@ func tideSparkline(events []tideEvent, now time.Time, loc *time.Location) templa
 	}
 	localNow := now.In(loc)
 	dayStart := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, loc)
-	dayEnd := dayStart.Add(24 * time.Hour)
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	dayLength := dayEnd.Sub(dayStart)
 
 	// Extend the curve past both ends of the day by mirroring the nearest cycle.
 	points := append([]tideEvent(nil), events...)
@@ -259,7 +286,7 @@ func tideSparkline(events []tideEvent, now time.Time, loc *time.Location) templa
 	var path strings.Builder
 	const samples = 48
 	for i := 0; i <= samples; i++ {
-		t := dayStart.Add(time.Duration(i) * 24 * time.Hour / samples)
+		t := dayStart.Add(time.Duration(i) * dayLength / samples)
 		cmd := "L"
 		if i == 0 {
 			cmd = "M"
@@ -268,10 +295,10 @@ func tideSparkline(events []tideEvent, now time.Time, loc *time.Location) templa
 	}
 	fmt.Fprintf(&path, "L%.0f,%.0f L0,%.0f Z", width, height, height)
 
-	nowX := width * localNow.Sub(dayStart).Hours() / 24
+	nowX := width * float64(localNow.Sub(dayStart)) / float64(dayLength)
 	nowY := y(heightAt(localNow))
 	return template.HTML(fmt.Sprintf(
-		`<svg viewBox="0 0 220 64" width="220" height="64" aria-hidden="true">`+
+		`<svg viewBox="0 0 220 64" width="220" height="64" preserveAspectRatio="none" aria-hidden="true">`+
 			`<path d="%s" fill="#aaa" stroke="#000" stroke-width="2.5" stroke-linejoin="round"></path>`+
 			`<line x1="%.1f" y1="0" x2="%.1f" y2="64" stroke="#000" stroke-width="2.5"></line>`+
 			`<circle cx="%.1f" cy="%.1f" r="5" fill="#fff" stroke="#000" stroke-width="2.5"></circle>`+
@@ -308,13 +335,13 @@ func nextSunEvent(weather WeatherData, now time.Time, loc *time.Location) (strin
 	case weather.Current.Sunrise == 0 || weather.Current.Sunset == 0:
 		return "", ""
 	case now.Before(sunrise):
-		return "sunrise", sunrise.Format("3:04")
+		return "sunrise", sunrise.Format("3:04 PM")
 	case now.Before(sunset):
-		return "sunset", sunset.Format("3:04")
+		return "sunset", sunset.Format("3:04 PM")
 	case len(weather.Daily) > 1 && weather.Daily[1].Sunrise != 0:
-		return "sunrise", time.Unix(weather.Daily[1].Sunrise, 0).In(loc).Format("3:04")
+		return "sunrise", time.Unix(weather.Daily[1].Sunrise, 0).In(loc).Format("3:04 PM")
 	default:
-		return "sunrise", sunrise.Format("3:04")
+		return "sunrise", sunrise.Format("3:04 PM")
 	}
 }
 
@@ -361,6 +388,25 @@ func overviewNotices(notices []Notice) []Notice {
 			continue
 		}
 		result = append(result, notice)
+	}
+	// Warnings precede routine UV and temperature advice.
+	sort.SliceStable(result, func(i, j int) bool {
+		priority := func(kind string) int {
+			switch kind {
+			case "alert":
+				return 0
+			case "wind":
+				return 1
+			case "temperature":
+				return 2
+			default:
+				return 3
+			}
+		}
+		return priority(result[i].Kind) < priority(result[j].Kind)
+	})
+	if len(result) > 2 {
+		result = result[:2]
 	}
 	return result
 }

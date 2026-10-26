@@ -60,6 +60,11 @@ type DashboardView struct {
 	CurrentIconClass   string
 	FeelsLike          string
 	NowLabel           string
+	Condition          string
+	DailyRange         string
+	WeatherUpdated     string
+	WeatherAsOf        string
+	StaleText          string
 	Rain               *RainBand
 	Tide               *TideBand
 	OverviewNotices    []Notice
@@ -80,8 +85,10 @@ type DashboardView struct {
 	Notices            []Notice
 	NoticeSlots        [2]Notice
 	DetailLinks        map[string]string
+	ActiveSection      string
 	SurfHours          []SurfHourView
 	SurfSummary        string
+	SurfBestShown      bool
 	TideEvents         []TideEventView
 	RainHours          []RainHourView
 	SurfUpdated        string
@@ -154,6 +161,7 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 		Stale:              snapshot.Weather.Stale || snapshot.Tide.Stale || snapshot.Surf.Stale,
 		AutoRefreshURL:     buildAutoRefreshURL(r, now.Unix()),
 		DetailLinks:        detailLinks(r),
+		ActiveSection:      selectedSection(r),
 	}
 
 	if view.Summary == "" {
@@ -194,12 +202,44 @@ func populateOverview(view *DashboardView, snapshot DashboardSnapshot, now time.
 	weather := snapshot.Weather.Data
 	loc := surfLocation(weather)
 	view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
+	if len(weather.Current.Weather) > 0 {
+		view.Condition = weather.Current.Weather[0].Description
+	}
+	if weather.Daily[0].Temp.Max != 0 || weather.Daily[0].Temp.Min != 0 {
+		view.DailyRange = fmt.Sprintf("High %.0f° · Low %.0f°", weather.Daily[0].Temp.Max, weather.Daily[0].Temp.Min)
+	}
+	view.WeatherUpdated = detailUpdated(snapshot.Weather.FetchedAt, snapshot.Weather.Stale, loc)
+	view.StaleText = staleText(snapshot, loc)
+	if snapshot.Weather.Stale && !snapshot.Weather.FetchedAt.IsZero() {
+		view.WeatherAsOf = "as of " + snapshot.Weather.FetchedAt.In(loc).Format("3:04 PM")
+	}
 	view.NowLabel = strings.ToUpper(now.In(loc).Format("Mon 3:04 PM"))
 	view.Rain = buildRainBand(weather.Hourly, now, loc)
 	view.Tide = buildTideBand(snapshot.Tide.Data.Predictions, now, easternLocation())
 	view.OverviewNotices = overviewNotices(view.Notices)
 	view.MoonPercent, view.MoonName = moonDescription(weather.Daily[0].MoonPhase)
 	view.SunEventLabel, view.SunEventTime = nextSunEvent(weather, now, loc)
+}
+
+// staleText names the cached sources so an old reading is not mistaken for a current one.
+func staleText(snapshot DashboardSnapshot, loc *time.Location) string {
+	if snapshot.Weather.Stale && !snapshot.Weather.FetchedAt.IsZero() {
+		return "Weather from " + snapshot.Weather.FetchedAt.In(loc).Format("Mon 3:04 PM") + " · updates unavailable"
+	}
+	var sources []string
+	if snapshot.Weather.Stale {
+		sources = append(sources, "weather")
+	}
+	if snapshot.Tide.Stale {
+		sources = append(sources, "tide")
+	}
+	if snapshot.Surf.Stale {
+		sources = append(sources, "surf")
+	}
+	if len(sources) == 0 {
+		return ""
+	}
+	return "Cached " + strings.Join(sources, " and ") + " data · updates unavailable"
 }
 
 func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {
@@ -219,8 +259,14 @@ func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {
 
 func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 	var notices []Notice
-	if len(weather.Alerts) > 0 && strings.TrimSpace(weather.Alerts[0].Event) != "" {
-		notices = append(notices, Notice{Kind: "alert", Text: weather.Alerts[0].Event})
+	for _, alert := range weather.Alerts {
+		event := strings.TrimSpace(alert.Event)
+		// Small craft advisories concern boaters, not anyone reading this at home.
+		if event == "" || strings.Contains(strings.ToLower(event), "small craft") {
+			continue
+		}
+		notices = append(notices, Notice{Kind: "alert", Text: event})
+		break
 	}
 
 	for _, hour := range weather.Hourly {
@@ -249,6 +295,9 @@ func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 
 	maxGust := weather.Current.WindGust
 	for _, hour := range weather.Hourly {
+		if time.Unix(hour.Dt, 0).Before(now.Truncate(time.Hour)) {
+			continue
+		}
 		if time.Unix(hour.Dt, 0).After(now.Add(12 * time.Hour)) {
 			break
 		}
@@ -264,9 +313,6 @@ func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 		notices = append(notices, Notice{Kind: "temperature", Text: fmt.Sprintf("Feels like %.0f° — dress warmly", weather.Current.FeelsLike)})
 	}
 
-	if len(notices) > 2 {
-		return notices[:2]
-	}
 	return notices
 }
 

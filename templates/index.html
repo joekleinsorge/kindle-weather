@@ -1,56 +1,81 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Weather &amp; Tide</title>
     <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
     <meta http-equiv="refresh" content="{{.AutoRefreshSeconds}};url={{.AutoRefreshURL}}">
     <meta name="viewport"
           content="{{if .Horizontal}}width=1024, initial-scale=1, maximum-scale=1, user-scalable=no{{else}}width=758, initial-scale=1, maximum-scale=1, user-scalable=no{{end}}">
-    <link rel="stylesheet" href="/css/kindle.css?v=11">
+    <link rel="stylesheet" href="/css/kindle.css?v=15">
     <link rel="stylesheet" href="/css/weather-icons.min.css?v=2">
     <link rel="icon" href="data:,">
 </head>
 <body class="{{if .Horizontal}}horizontal{{end}}">
     <main id="page">
         <div id="overview">
-        <header id="current-weather">
+        <div id="masthead"><span>Crescent Beach</span>{{if .NowLabel}}<span id="now-time">{{.NowLabel}}</span>{{end}}</div>
+        {{if .Stale}}<p class="data-status" role="status">{{if .StaleText}}{{.StaleText}}{{else}}Cached forecast · updates unavailable{{end}}</p>{{end}}
+        {{if .OverviewNotices}}
+        <section id="insights" aria-label="Alerts">
+            {{range .OverviewNotices}}<div class="insight notice {{.Kind}}">{{.Text}}</div>{{end}}
+        </section>
+        {{end}}
+        <header id="current-weather"{{if .WeatherAsOf}} class="stale"{{end}}>
             <div class="tempWrapper">
                 <div id="temp">{{.CurrentTemperature}}</div>
+                {{if .Condition}}<div id="condition">{{.Condition}}</div>{{end}}
+                {{if .DailyRange}}<div id="daily-range">{{.DailyRange}}</div>{{end}}
             </div>
             <div id="now">
                 <div id="iconWrapper" aria-hidden="true"><i id="icon" class="{{.CurrentIconClass}}"></i></div>
-                {{if .FeelsLike}}<div id="feels">feels {{.FeelsLike}}</div>{{end}}
-                {{if .NowLabel}}<div id="now-time">{{.NowLabel}}</div>{{end}}
+                {{if .WeatherAsOf}}<div id="feels">{{.WeatherAsOf}}</div>{{else if .FeelsLike}}<div id="feels">feels {{.FeelsLike}}°</div>{{end}}
             </div>
         </header>
 
+        {{if .Forecast}}
+        <section id="day-ahead" aria-label="Weather ahead">
+            {{range .Forecast}}<div class="forecast-hour">
+                <div class="forecast-time">{{.Time}}</div>
+                <div class="forecast-value" title="{{.Description}}"><i class="{{.IconClass}}" aria-hidden="true"></i> {{.Temperature}}</div>
+            </div>{{end}}
+        </section>
+        {{end}}
+
         {{with .Rain}}
-        <section id="rain-band" class="band inverse" aria-label="Rain">
+        <section id="rain-band" class="band{{if .Likely}} inverse{{else}} calm{{end}}" aria-label="Rain">
+            <a class="band-link" href="{{$.DetailLinks.rain}}" aria-label="Open hourly rain forecast">
             <div class="band-row">
                 <div class="band-main">
                     <div class="band-label">{{.Label}}</div>
                     <div class="band-big">{{.Big}}{{if .Suffix}}<span class="band-suffix"> {{.Suffix}}</span>{{end}}</div>
                 </div>
                 <div class="band-side">
+                    <div class="chart-label">RAIN CHANCE</div>
                     <div class="rain-bars" aria-hidden="true">{{range .Bars}}<span class="rain-bar h{{.Bucket}} {{.Level}}"></span>{{end}}</div>
+                    <div class="chart-axis"><span>{{.StartLabel}}</span><span>{{.EndLabel}}</span></div>
                     <div class="band-caption">{{.Caption}}</div>
                 </div>
             </div>
+            </a>
         </section>
+        {{else}}
+        <section id="rain-band" class="band calm"><div class="band-label">RAIN</div><div class="band-caption">Hourly forecast unavailable</div></section>
         {{end}}
 
         <section id="tide-band" class="band" aria-label="Next tide">
             {{with .Tide}}
+            <a class="band-link" href="{{$.DetailLinks.tides}}" aria-label="Open tide times and heights">
             <div class="band-row">
                 <div class="band-main">
                     <div class="band-label">{{.Label}}</div>
                     <div class="band-big">{{.Big}}<span class="band-suffix"> {{.Suffix}}</span></div>
                 </div>
                 <div class="band-side">
-                    {{if .Spark}}<div class="tide-spark">{{.Spark}}</div>{{end}}
+                    {{if .Spark}}<div class="tide-spark">{{.Spark}}</div><div class="chart-axis tide-axis"><span>12a</span><span>12p</span><span>12a</span></div>{{end}}
                     <div class="band-caption">{{.Caption}}</div>
                 </div>
             </div>
+            </a>
             {{else}}
             <div class="band-label">TIDES</div>
             <div class="band-caption">Tide data unavailable</div>
@@ -59,6 +84,7 @@
 
         {{if .BeachStatus}}
         <section id="beach-status" class="band {{.BeachStatus.Kind}}" aria-label="Beach">
+            <a class="band-link" href="{{if eq .BeachStatus.Kind "tide"}}{{.DetailLinks.tides}}{{else}}{{.DetailLinks.surf}}{{end}}" aria-label="Open beach forecast details">
             <div class="band-row">
                 <div class="band-main">
                     <div class="band-label">
@@ -81,14 +107,11 @@
                 </div>
                 {{if .BeachStatus.Detail}}<div class="band-side"><div class="band-caption">{{.BeachStatus.Detail}}</div></div>{{end}}
             </div>
+            </a>
         </section>
         {{end}}
 
-        {{if .OverviewNotices}}
-        <section id="insights" aria-label="Alerts">
-            {{range .OverviewNotices}}<div class="insight notice {{.Kind}}">{{.Text}}</div>{{end}}
-        </section>
-        {{end}}
+
 
         <footer id="footer">
             <div id="moon" aria-label="Moon phase">
@@ -121,6 +144,7 @@
             </div>
         </footer>
         {{template "detail-nav" .}}
+        {{if .WeatherUpdated}}<p class="weather-updated">{{.WeatherUpdated}}</p>{{end}}
         </div>
 
         <section id="surf" class="detail-section" aria-labelledby="surf-title">
@@ -130,9 +154,9 @@
             <table class="detail-table surf-table">
                 <caption>Upcoming hourly wave and wind forecast</caption>
                 <thead><tr><th scope="col">Time</th><th scope="col">Waves</th><th scope="col">Period</th><th scope="col">From</th><th scope="col">Wind</th></tr></thead>
-                <tbody>{{range .SurfHours}}<tr><th scope="row">{{.Time}}</th><td>{{.Height}}</td><td>{{.Period}}</td><td>{{.Direction}}</td><td>{{.Wind}}</td></tr>{{end}}</tbody>
+                <tbody>{{range .SurfHours}}<tr{{if .Best}} class="best"{{end}}><th scope="row">{{.Time}}</th><td>{{.Height}}</td><td>{{.Period}}</td><td>{{.Direction}}</td><td>{{.Wind}}</td></tr>{{end}}</tbody>
             </table>
-            <p class="detail-note">Offshore wave forecast; breaking waves at the beach may differ. Directions show where waves and wind come from.</p>
+            <p class="detail-note">{{if .SurfBestShown}}Shaded rows are the best surf window. {{end}}Offshore wave forecast; breaking waves at the beach may differ. Directions show where waves and wind come from.</p>
             {{end}}
             <p class="detail-note">Open-Meteo waves · OpenWeather wind{{if .SurfUpdated}}<br>{{.SurfUpdated}}{{end}}</p>
             {{template "detail-nav" .}}
@@ -180,9 +204,9 @@
 
 {{define "detail-nav"}}
 <nav class="detail-nav" aria-label="Forecast sections">
-    <a href="{{.DetailLinks.overview}}">Overview</a>
-    <a href="{{.DetailLinks.surf}}">Surf</a>
-    <a href="{{.DetailLinks.tides}}">Tides</a>
-    <a href="{{.DetailLinks.rain}}">Rain</a>
+    <a href="{{.DetailLinks.overview}}"{{if eq .ActiveSection "overview"}} aria-current="page"{{end}}>Overview</a>
+    <a href="{{.DetailLinks.surf}}"{{if eq .ActiveSection "surf"}} aria-current="page"{{end}}>Surf</a>
+    <a href="{{.DetailLinks.tides}}"{{if eq .ActiveSection "tides"}} aria-current="page"{{end}}>Tides</a>
+    <a href="{{.DetailLinks.rain}}"{{if eq .ActiveSection "rain"}} aria-current="page"{{end}}>Rain</a>
 </nav>
 {{end}}
