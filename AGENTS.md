@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `kindle-weather.go` hosts the HTTP server, API clients, caching, and template rendering; keep glue code here and place substantial helpers in new files within the root module.
+- `kindle-weather.go` hosts configuration, the HTTP server, logging, and metrics; API clients and their caches live in `weather.go`, `tide.go`, `launch.go`, and `surf.go`, and view building in `dashboard.go`, `overview.go`, and `details.go`. Place substantial new helpers in their own files within the root module.
 - `templates/` contains the Go HTML templates rendered for Kindle; `css/` and `font/` hold static assets served under `/css`.
 - `k8s/` provides deploy-ready manifests (deployment, service, ingress, certificate); mirror this structure when adding environment-specific overlays.
 - `kindle_test.go` exercises core formatting helpers; add new unit tests alongside the logic they cover.
