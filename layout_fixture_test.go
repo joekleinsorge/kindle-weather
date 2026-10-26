@@ -162,7 +162,12 @@ func layoutFixtureHandler(t *testing.T) http.Handler {
 			{Time: "4:38 AM", Type: "H", Height: 3}, {Time: "10:25 AM", Type: "L", Height: 0},
 			{Time: "5:13 PM", Type: "H", Height: 3}, {Time: "11:13 PM", Type: "L", Height: 0},
 		})
-		if err := tmpl.Execute(w, view); err != nil {
+		page := tmpl
+		if r.URL.Path == "/dashboard.svg" {
+			w.Header().Set("Content-Type", "image/svg+xml")
+			page = svgTmpl
+		}
+		if err := page.Execute(w, view); err != nil {
 			t.Error(err)
 		}
 	})

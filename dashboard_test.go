@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"html/template"
 	"io"
@@ -201,14 +202,24 @@ func TestTideCacheRejectsPreviousDayFallback(t *testing.T) {
 func TestDashboardSVGTemplateRenders(t *testing.T) {
 	view := DashboardView{
 		CurrentTemperature: "72°", Summary: "Clear",
-		TideSVG: template.HTML(`<svg viewBox="0 0 600 95"></svg>`),
+		TideSVG:     template.HTML(`<svg viewBox="0 0 600 95"></svg>`),
+		Rain:        &RainBand{Label: "RAIN LIKELY FROM", Big: "3", Suffix: "PM", Likely: true},
+		Tide:        &TideBand{Label: "LOW TIDE · FALLING", Big: "7:32", Suffix: "PM"},
+		BeachStatus: &BeachStatus{Kind: "surf", Big: "9–11", Suffix: "AM", Detail: "3.0 ft @ 10 s\nwind 8 mph"},
+		StaleText:   "Weather from Thu 4:05 AM · updates unavailable",
 	}
 	var output bytes.Buffer
 	if err := svgTmpl.Execute(&output, view); err != nil {
 		t.Fatalf("SVG template: %v", err)
 	}
-	if !strings.Contains(output.String(), `viewBox="0 0 758 1024"`) || !strings.Contains(output.String(), "72°") {
-		t.Fatalf("unexpected SVG: %s", output.String())
+	svg := output.String()
+	for _, want := range []string{`viewBox="0 0 758 1024"`, "72°", `<desc id="description">Clear</desc>`, "RAIN LIKELY FROM", "7:32", "Weather from Thu 4:05 AM", ">3.0 ft @ 10 s<", ">wind 8 mph<"} {
+		if !strings.Contains(svg, want) {
+			t.Fatalf("SVG missing %q: %s", want, svg)
+		}
+	}
+	if err := xml.Unmarshal(output.Bytes(), new(struct{})); err != nil {
+		t.Fatalf("SVG is not well-formed XML: %v", err)
 	}
 }
 

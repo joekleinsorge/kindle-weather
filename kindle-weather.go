@@ -145,6 +145,8 @@ func init() {
 	var err error
 	funcs := template.FuncMap{
 		"getIconClassName": getIconClassName,
+		// SVG text cannot wrap, so multi-line captions are drawn one line at a time.
+		"lines": func(s string) []string { return strings.Split(s, "\n") },
 	}
 	tmpl, err = template.New("index.html").Funcs(funcs).ParseFS(templatesFS, "templates/index.html")
 	if err != nil {

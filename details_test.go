@@ -56,3 +56,31 @@ func TestMissingDetailSources(t *testing.T) {
 		t.Fatalf("missing sources: %+v", view)
 	}
 }
+
+func TestSurfDetailsMarkBestWindow(t *testing.T) {
+	loc := easternLocation()
+	now := time.Date(2026, time.August, 23, 8, 0, 0, 0, loc)
+	weather := validWeather(now)
+	weather.Current.Sunrise = now.Add(-2 * time.Hour).Unix()
+	weather.Current.Sunset = now.Add(10 * time.Hour).Unix()
+	weather.Hourly = []HourlyWeather{
+		{Dt: now.Unix(), WindSpeed: 4, WindDeg: 90},
+		{Dt: now.Add(time.Hour).Unix(), WindSpeed: 4, WindDeg: 90},
+		{Dt: now.Add(2 * time.Hour).Unix(), WindSpeed: 8, WindDeg: 270},
+	}
+	forecast := SurfForecast{Hourly: SurfHourlyForecast{
+		Time:          []int64{now.Unix(), now.Add(time.Hour).Unix(), now.Add(2 * time.Hour).Unix()},
+		WaveHeight:    []float64{0.5, 2.0, 3.0},
+		WaveDirection: []float64{90, 90, 90},
+		WavePeriod:    []float64{5, 8, 10},
+	}}
+	view := DashboardView{}
+	populateDetails(&view, DashboardSnapshot{Weather: WeatherSnapshot{Data: weather}, Surf: SurfSnapshot{Data: forecast}}, now)
+	var best []bool
+	for _, hour := range view.SurfHours {
+		best = append(best, hour.Best)
+	}
+	if len(best) != 3 || best[0] || !best[1] || !best[2] || !view.SurfBestShown {
+		t.Fatalf("best surf rows = %v, shown = %v", best, view.SurfBestShown)
+	}
+}

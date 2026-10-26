@@ -238,7 +238,8 @@ kubectl describe deployment kindle-weather
 ## API Endpoints
 
 - `/` - Main weather display page
-- `/dashboard.svg` - Static 758×1024 dashboard (`?h` for 1024×758)
+- `/dashboard.svg` - Static 758×1024 version of the overview: rain, tide, and
+  beach bands, alerts, and cached-data status (`?h` scales it into 1024×758)
 - `/css/*` - Static CSS files
 - `/font/*` - Weather icon fonts
 - `/health` - Process liveness

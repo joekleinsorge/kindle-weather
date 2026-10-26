@@ -150,3 +150,29 @@ test('solid black marks only likely rain and cached weather', async ({ page }, t
   await expect(page.locator('#current-weather')).toHaveClass(/stale/);
   await expect(page.locator('#feels')).toHaveText('as of 4:05 AM');
 });
+
+for (const scenario of ['', 'long', 'paperwhite1&stale', 'minimal']) {
+  test(`SVG dashboard text stays on the canvas: ${scenario || 'photo summary'}`, async ({ page }, testInfo) => {
+    if (testInfo.project.name.includes('toolbar')) test.skip(); // the SVG has a fixed size
+    const landscape = testInfo.project.name.includes('landscape');
+    const response = await page.goto(`/dashboard.svg?${landscape ? 'h&' : ''}${scenario}`);
+    expect(response.headers()['content-type']).toContain('image/svg+xml');
+    const problems = await page.evaluate(() => {
+      const errors = [];
+      const svg = document.documentElement.getBoundingClientRect();
+      const boxes = [...document.querySelectorAll('text')].map(t => [t.textContent.trim(), t.getBoundingClientRect()]);
+      for (const [text, box] of boxes) {
+        if (box.left < svg.left - 1 || box.right > svg.right + 1 || box.bottom > svg.bottom + 1) errors.push(`off canvas: ${text}`);
+      }
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+        const [a, A] = boxes[i], [b, B] = boxes[j];
+        // Text boxes include descender space below the baseline, which digits and capitals never use.
+        const inkBottom = box => box.bottom - box.height * 0.22;
+        if (A.left < B.right - 2 && B.left < A.right - 2 && A.top < inkBottom(B) && B.top < inkBottom(A))
+          errors.push(`"${a}" overlaps "${b}"`);
+      }
+      return errors;
+    });
+    expect(problems).toEqual([]);
+  });
+}
