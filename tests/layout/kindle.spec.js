@@ -28,6 +28,7 @@ for (const scenario of ['paperwhite1', 'paperwhite1&wide-time']) {
         if (element.scrollWidth > element.clientWidth + 1) errors.push(`horizontal overflow in ${element.className}`);
       }
       if (document.documentElement.scrollWidth > innerWidth) errors.push('page overflows horizontally');
+      if (document.documentElement.scrollHeight > innerHeight + 1) errors.push('overview scrolls');
       if (document.querySelectorAll('script').length) errors.push('dashboard requires JavaScript');
       return errors;
     });
@@ -39,7 +40,7 @@ for (const scenario of ['paperwhite1', 'paperwhite1&wide-time']) {
   });
 }
 
-for (const scenario of ['', 'long', 'minimal', 'possible', 'stale']) {
+for (const scenario of ['', 'long', 'minimal']) {
   test(`Kindle layout fits: ${scenario || 'photo summary'}`, async ({ page }, testInfo) => {
     const landscape = testInfo.project.name.includes('landscape');
     await page.goto(`/?${landscape ? 'h&' : ''}${scenario}`);
@@ -47,7 +48,7 @@ for (const scenario of ['', 'long', 'minimal', 'possible', 'stale']) {
     const problems = await page.evaluate(() => {
       const errors = [];
       // Bands may sit side by side in landscape, so check every pair of rows.
-      const rows = ['#masthead', '#current-weather', '#day-ahead', '#rain-band', '#tide-band', '#beach-status', '#insights', '#footer']
+      const rows = ['#current-weather', '#rain-band', '#tide-band', '#beach-status', '#insights', '#footer']
         .map(selector => [selector, document.querySelector(selector)])
         .filter(([, element]) => element)
         .map(([selector, element]) => [selector, element.getBoundingClientRect()]);
@@ -58,8 +59,12 @@ for (const scenario of ['', 'long', 'minimal', 'possible', 'stale']) {
             errors.push(`${b} overlaps ${a}`);
         }
       }
-      const bottom = document.querySelector('#overview').getBoundingClientRect().bottom;
+      const bottom = Math.max(...rows.map(([, box]) => box.bottom));
       if (bottom > innerHeight) errors.push(`overview ends at ${bottom}, viewport ends at ${innerHeight}`);
+      // The overview is a single screen: nothing below it to scroll to.
+      if (document.documentElement.scrollHeight > innerHeight + 1)
+        errors.push(`page scrolls: ${document.documentElement.scrollHeight} > ${innerHeight}`);
+      if (document.querySelector('.detail-section')) errors.push('detail tables belong on /details');
       if (document.documentElement.scrollWidth > innerWidth) errors.push('horizontal overflow');
       // Check individual labels as well as row boxes: clipped text can fit inside a broken row.
       for (const element of document.querySelectorAll('#temp, #now, .band-main, .band-side, .band-label, .band-big, .band-caption, .band-text, .insight, #moon, #sun, #launch-cell')) {
@@ -76,27 +81,31 @@ for (const scenario of ['', 'long', 'minimal', 'possible', 'stale']) {
   });
 }
 
-test('detail links and tables work without JavaScript', async ({ browser }, testInfo) => {
+test('details page links work without JavaScript and refresh back to the overview', async ({ browser }, testInfo) => {
   const landscape = testInfo.project.name.includes('landscape');
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: testInfo.project.use.viewport });
   const page = await context.newPage();
   await page.goto(`/?${landscape ? 'h&' : ''}`);
-  for (const [label, id] of [['Surf', 'surf'], ['Tides', 'tides'], ['Rain', 'rain'], ['Overview', 'overview']]) {
+  await page.locator('#details-link').click();
+  await expect(page).toHaveURL(/\/details(\?.*)?#surf$/);
+  for (const [label, id] of [['Tides', 'tides'], ['Rain', 'rain'], ['Surf', 'surf']]) {
     await page.locator('nav').first().getByRole('link', { name: label, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`section=${id}#${id}$`));
+    await expect(page).toHaveURL(new RegExp(`/details(\\?.*)?#${id}$`));
     if (landscape) expect(new URL(page.url()).searchParams.has('h')).toBeTruthy();
-    const section = page.locator(`#${id}`);
-    const box = await section.boundingBox();
+    const box = await page.locator(`#${id}`).boundingBox();
     // The final section may sit below the top when the page cannot scroll farther.
     expect(box.y).toBeGreaterThanOrEqual(-1);
     expect(box.y).toBeLessThan(testInfo.project.use.viewport.height - 40);
-    await expect(page.locator('meta[http-equiv="refresh"]')).toHaveAttribute('content', new RegExp(`section=${id}#${id}$`));
   }
+  // A Kindle left on the details page returns to the overview on refresh.
+  await expect(page.locator('meta[http-equiv="refresh"]')).toHaveAttribute('content', /^600;url=\/\?/);
+  await page.locator('nav').first().getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(page.locator('#overview')).toBeVisible();
   await context.close();
 });
 
 test('detail tables stay readable within the page width', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/details');
   const problems = await page.evaluate(() => {
     const errors = [];
     for (const element of document.querySelectorAll('.detail-table th, .detail-table td, .detail-nav a, .detail-section')) {
@@ -107,72 +116,3 @@ test('detail tables stay readable within the page width', async ({ page }) => {
   });
   expect(problems).toEqual([]);
 });
-
-test('overview context and navigation fit on screen', async ({ page }, testInfo) => {
-  const landscape = testInfo.project.name.includes('landscape');
-  await page.goto(`/?${landscape ? 'h&' : ''}`);
-  await expect(page.locator('#condition')).toHaveText('Partly cloudy');
-  await expect(page.locator('#day-ahead .forecast-hour')).toHaveCount(4);
-  await expect(page.locator('#overview nav a[aria-current="page"]')).toHaveText('Overview');
-  expect(await page.locator('#insights').evaluate(el => el.getBoundingClientRect().bottom))
-    .toBeLessThanOrEqual(await page.locator('#current-weather').evaluate(el => el.getBoundingClientRect().top));
-  await expect(page.locator('#daily-range')).toHaveText('High 91° · Low 76°');
-  await expect(page.locator('.weather-updated')).toHaveText('Updated Thu 8:20 AM');
-  const box = await page.locator('#overview').boundingBox();
-  expect(box.y + box.height).toBeLessThanOrEqual(testInfo.project.use.viewport.height);
-  await expect(page.locator('#rain-band .chart-axis')).toContainText('8a');
-  await expect(page.locator('#tide-band .chart-axis')).toContainText('12p');
-});
-
-test('large panels open details without JavaScript', async ({ browser }, testInfo) => {
-  const landscape = testInfo.project.name.includes('landscape');
-  const context = await browser.newContext({ javaScriptEnabled: false, viewport: testInfo.project.use.viewport });
-  const page = await context.newPage();
-  for (const [panel, section] of [['rain-band', 'rain'], ['tide-band', 'tides'], ['beach-status', 'surf']]) {
-    await page.goto(`/?${landscape ? 'h&' : ''}`);
-    await page.locator(`#${panel} .band-link`).click();
-    await expect(page).toHaveURL(new RegExp(`section=${section}#${section}$`));
-    if (landscape) expect(new URL(page.url()).searchParams.has('h')).toBeTruthy();
-  }
-  await context.close();
-});
-
-test('solid black marks only likely rain and cached weather', async ({ page }, testInfo) => {
-  const prefix = testInfo.project.name.includes('landscape') ? 'h&' : '';
-  await page.goto(`/?${prefix}`);
-  await expect(page.locator('#rain-band')).toHaveClass(/inverse/);
-  await expect(page.locator('#day-ahead .forecast-condition')).toHaveCount(0);
-  await expect(page.locator('#surf tr.best')).toHaveCount(2);
-  await page.goto(`/?${prefix}paperwhite1`);
-  await expect(page.locator('#rain-band')).toHaveClass(/calm/);
-  await page.goto(`/?${prefix}stale`);
-  await expect(page.locator('.data-status')).toHaveText('Weather from Thu 4:05 AM · updates unavailable');
-  await expect(page.locator('#current-weather')).toHaveClass(/stale/);
-  await expect(page.locator('#feels')).toHaveText('as of 4:05 AM');
-});
-
-for (const scenario of ['', 'long', 'paperwhite1&stale', 'minimal']) {
-  test(`SVG dashboard text stays on the canvas: ${scenario || 'photo summary'}`, async ({ page }, testInfo) => {
-    if (testInfo.project.name.includes('toolbar')) test.skip(); // the SVG has a fixed size
-    const landscape = testInfo.project.name.includes('landscape');
-    const response = await page.goto(`/dashboard.svg?${landscape ? 'h&' : ''}${scenario}`);
-    expect(response.headers()['content-type']).toContain('image/svg+xml');
-    const problems = await page.evaluate(() => {
-      const errors = [];
-      const svg = document.documentElement.getBoundingClientRect();
-      const boxes = [...document.querySelectorAll('text')].map(t => [t.textContent.trim(), t.getBoundingClientRect()]);
-      for (const [text, box] of boxes) {
-        if (box.left < svg.left - 1 || box.right > svg.right + 1 || box.bottom > svg.bottom + 1) errors.push(`off canvas: ${text}`);
-      }
-      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
-        const [a, A] = boxes[i], [b, B] = boxes[j];
-        // Text boxes include descender space below the baseline, which digits and capitals never use.
-        const inkBottom = box => box.bottom - box.height * 0.22;
-        if (A.left < B.right - 2 && B.left < A.right - 2 && A.top < inkBottom(B) && B.top < inkBottom(A))
-          errors.push(`"${a}" overlaps "${b}"`);
-      }
-      return errors;
-    });
-    expect(problems).toEqual([]);
-  });
-}

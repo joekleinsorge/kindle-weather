@@ -35,17 +35,36 @@ func TestForecastDetails(t *testing.T) {
 }
 
 func TestDetailNavigationPreservesOrientationAndRefresh(t *testing.T) {
-	r := httptest.NewRequest("GET", "/?h&section=surf", nil)
+	r := httptest.NewRequest("GET", "/details?h&refresh=9&section=surf", nil)
 	links := detailLinks(r)
-	if !strings.Contains(links["rain"], "h=") || !strings.HasSuffix(links["rain"], "section=rain#rain") {
+	if links["rain"] != "/details?h=#rain" {
 		t.Fatalf("rain link = %q", links["rain"])
 	}
-	if got := buildAutoRefreshURL(r, 123); !strings.HasSuffix(got, "section=surf#surf") {
+	if links["overview"] != "/?h=" {
+		t.Fatalf("overview link = %q", links["overview"])
+	}
+	// Refreshing from the details page returns to the overview.
+	if got := buildAutoRefreshURL(r, 123); got != "/?h=&refresh=123" {
 		t.Fatalf("refresh URL = %q", got)
 	}
-	r = httptest.NewRequest("GET", "/?section=unknown", nil)
-	if strings.Contains(buildAutoRefreshURL(r, 123), "#") {
-		t.Fatal("unknown section became a fragment")
+}
+
+func TestDetailsTemplateRendersTablesAndReturnsToOverview(t *testing.T) {
+	view := DashboardView{
+		DetailLinks:    detailLinks(httptest.NewRequest("GET", "/details", nil)),
+		AutoRefreshURL: "/?refresh=1",
+		Summary:        "Clear skies",
+		TideEvents:     []TideEventView{{Time: "3:17 AM", Type: "Low", Height: "0.1 ft"}},
+		MoonPercent:    "26%", MoonName: "crescent",
+	}
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "details.html", view); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`content="600;url=/?refresh=1"`, `id="surf"`, `id="tides"`, `id="rain"`, "3:17 AM", "Clear skies", "Moon 26% lit · crescent"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Fatalf("details page missing %q", want)
+		}
 	}
 }
 
@@ -54,33 +73,5 @@ func TestMissingDetailSources(t *testing.T) {
 	populateDetails(&view, DashboardSnapshot{}, time.Now())
 	if len(view.SurfHours) != 0 || len(view.TideEvents) != 0 || len(view.RainHours) != 0 || view.SurfSummary != "Surf forecast temporarily unavailable." {
 		t.Fatalf("missing sources: %+v", view)
-	}
-}
-
-func TestSurfDetailsMarkBestWindow(t *testing.T) {
-	loc := easternLocation()
-	now := time.Date(2026, time.August, 23, 8, 0, 0, 0, loc)
-	weather := validWeather(now)
-	weather.Current.Sunrise = now.Add(-2 * time.Hour).Unix()
-	weather.Current.Sunset = now.Add(10 * time.Hour).Unix()
-	weather.Hourly = []HourlyWeather{
-		{Dt: now.Unix(), WindSpeed: 4, WindDeg: 90},
-		{Dt: now.Add(time.Hour).Unix(), WindSpeed: 4, WindDeg: 90},
-		{Dt: now.Add(2 * time.Hour).Unix(), WindSpeed: 8, WindDeg: 270},
-	}
-	forecast := SurfForecast{Hourly: SurfHourlyForecast{
-		Time:          []int64{now.Unix(), now.Add(time.Hour).Unix(), now.Add(2 * time.Hour).Unix()},
-		WaveHeight:    []float64{0.5, 2.0, 3.0},
-		WaveDirection: []float64{90, 90, 90},
-		WavePeriod:    []float64{5, 8, 10},
-	}}
-	view := DashboardView{}
-	populateDetails(&view, DashboardSnapshot{Weather: WeatherSnapshot{Data: weather}, Surf: SurfSnapshot{Data: forecast}}, now)
-	var best []bool
-	for _, hour := range view.SurfHours {
-		best = append(best, hour.Best)
-	}
-	if len(best) != 3 || best[0] || !best[1] || !best[2] || !view.SurfBestShown {
-		t.Fatalf("best surf rows = %v, shown = %v", best, view.SurfBestShown)
 	}
 }

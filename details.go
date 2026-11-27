@@ -9,7 +9,6 @@ import (
 
 type SurfHourView struct {
 	Time, Height, Period, Direction, Wind string
-	Best                                  bool
 }
 
 type RainHourView struct {
@@ -20,26 +19,22 @@ type TideEventView struct {
 	Time, Type, Height string
 }
 
-// Ordinary links work without JavaScript. The section in the query lets the
-// server include the same anchor in the automatic refresh URL.
+// detailsReturnSeconds is how long the details page stays up before it
+// refreshes back to the overview.
+const detailsReturnSeconds = 600
+
+// detailLinks are ordinary links that work without JavaScript. The overview
+// lives at / and the surf, tide, and rain tables at /details; the query string
+// (for example the landscape flag) is kept on both.
 func detailLinks(r *http.Request) map[string]string {
-	links := make(map[string]string)
-	for _, section := range []string{"overview", "surf", "tides", "rain"} {
-		q := r.URL.Query()
-		q.Del("refresh")
-		q.Set("section", section)
-		links[section] = (&url.URL{Path: r.URL.Path, RawQuery: q.Encode(), Fragment: section}).String()
+	q := r.URL.Query()
+	q.Del("refresh")
+	q.Del("section")
+	links := map[string]string{"overview": (&url.URL{Path: "/", RawQuery: q.Encode()}).String()}
+	for _, section := range []string{"surf", "tides", "rain"} {
+		links[section] = (&url.URL{Path: "/details", RawQuery: q.Encode(), Fragment: section}).String()
 	}
 	return links
-}
-
-func detailSection(section string) string {
-	switch section {
-	case "overview", "surf", "tides", "rain":
-		return section
-	default:
-		return ""
-	}
 }
 
 func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.Time) {
@@ -48,7 +43,6 @@ func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.T
 	// Include the current forecast hour, even partway through it.
 	start := now.Truncate(time.Hour)
 	hourly := snapshot.Surf.Data.Hourly
-	window := bestSurfWindow(snapshot.Surf.Data, weather, now)
 	for i := 0; i < usableSurfHours(hourly) && len(view.SurfHours) < 12; i++ {
 		t := time.Unix(hourly.Time[i], 0)
 		if t.Before(start) {
@@ -61,14 +55,12 @@ func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.T
 		view.SurfHours = append(view.SurfHours, SurfHourView{
 			Time: t.In(loc).Format("Mon 3 PM"), Height: fmt.Sprintf("%.1f ft", hourly.WaveHeight[i]),
 			Period: fmt.Sprintf("%.0f s", hourly.WavePeriod[i]), Direction: compassDirection(hourly.WaveDirection[i]), Wind: wind,
-			Best: window != nil && !t.Before(window.Start) && t.Before(window.End),
 		})
-		view.SurfBestShown = view.SurfBestShown || view.SurfHours[len(view.SurfHours)-1].Best
 	}
 	view.SurfSummary = "Surf forecast temporarily unavailable."
 	if len(view.SurfHours) > 0 {
 		view.SurfSummary = "No remaining daylight surf window matches your preferences today."
-		if window != nil {
+		if window := bestSurfWindow(snapshot.Surf.Data, weather, now); window != nil {
 			view.SurfSummary = fmt.Sprintf("Best surf today: %s–%s · %.1f ft at %.0f s · wind %.0f mph",
 				window.Start.Format("3:04 PM"), window.End.Format("3:04 PM"), window.WaveHeight, window.WavePeriod, window.WindSpeed)
 		}
@@ -111,11 +103,4 @@ func detailUpdated(fetchedAt time.Time, stale bool, loc *time.Location) string {
 		text += " · cached data; refresh unavailable"
 	}
 	return text
-}
-
-func selectedSection(r *http.Request) string {
-	if section := detailSection(r.URL.Query().Get("section")); section != "" {
-		return section
-	}
-	return "overview"
 }

@@ -59,12 +59,9 @@ type DashboardView struct {
 	CurrentTemperature string
 	CurrentIconClass   string
 	FeelsLike          string
+	High               string
+	Low                string
 	NowLabel           string
-	Condition          string
-	DailyRange         string
-	WeatherUpdated     string
-	WeatherAsOf        string
-	StaleText          string
 	Rain               *RainBand
 	Tide               *TideBand
 	OverviewNotices    []Notice
@@ -85,10 +82,8 @@ type DashboardView struct {
 	Notices            []Notice
 	NoticeSlots        [2]Notice
 	DetailLinks        map[string]string
-	ActiveSection      string
 	SurfHours          []SurfHourView
 	SurfSummary        string
-	SurfBestShown      bool
 	TideEvents         []TideEventView
 	RainHours          []RainHourView
 	SurfUpdated        string
@@ -98,6 +93,9 @@ type DashboardView struct {
 	AutoRefreshSeconds int
 	AutoRefreshURL     string
 }
+
+// DetailsReturnSeconds is exposed to the details template.
+func (DashboardView) DetailsReturnSeconds() int { return detailsReturnSeconds }
 
 func loadDashboardSnapshot(ctx context.Context, now time.Time) (DashboardSnapshot, error) {
 	var snapshot DashboardSnapshot
@@ -161,7 +159,6 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 		Stale:              snapshot.Weather.Stale || snapshot.Tide.Stale || snapshot.Surf.Stale,
 		AutoRefreshURL:     buildAutoRefreshURL(r, now.Unix()),
 		DetailLinks:        detailLinks(r),
-		ActiveSection:      selectedSection(r),
 	}
 
 	if view.Summary == "" {
@@ -201,17 +198,11 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 func populateOverview(view *DashboardView, snapshot DashboardSnapshot, now time.Time) {
 	weather := snapshot.Weather.Data
 	loc := surfLocation(weather)
-	view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
-	if len(weather.Current.Weather) > 0 {
-		view.Condition = weather.Current.Weather[0].Description
+	if feelsLikeWorthShowing(weather.Current.Temp, weather.Current.FeelsLike) {
+		view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
 	}
-	if weather.Daily[0].Temp.Max != 0 || weather.Daily[0].Temp.Min != 0 {
-		view.DailyRange = fmt.Sprintf("High %.0f° · Low %.0f°", weather.Daily[0].Temp.Max, weather.Daily[0].Temp.Min)
-	}
-	view.WeatherUpdated = detailUpdated(snapshot.Weather.FetchedAt, snapshot.Weather.Stale, loc)
-	view.StaleText = staleText(snapshot, loc)
-	if snapshot.Weather.Stale && !snapshot.Weather.FetchedAt.IsZero() {
-		view.WeatherAsOf = "as of " + snapshot.Weather.FetchedAt.In(loc).Format("3:04 PM")
+	if today := weather.Daily[0].Temp; today.Max != 0 || today.Min != 0 {
+		view.High, view.Low = fmt.Sprintf("%.0f°", today.Max), fmt.Sprintf("%.0f°", today.Min)
 	}
 	view.NowLabel = strings.ToUpper(now.In(loc).Format("Mon 3:04 PM"))
 	view.Rain = buildRainBand(weather.Hourly, now, loc)
@@ -221,25 +212,26 @@ func populateOverview(view *DashboardView, snapshot DashboardSnapshot, now time.
 	view.SunEventLabel, view.SunEventTime = nextSunEvent(weather, now, loc)
 }
 
-// staleText names the cached sources so an old reading is not mistaken for a current one.
-func staleText(snapshot DashboardSnapshot, loc *time.Location) string {
-	if snapshot.Weather.Stale && !snapshot.Weather.FetchedAt.IsZero() {
-		return "Weather from " + snapshot.Weather.FetchedAt.In(loc).Format("Mon 3:04 PM") + " · updates unavailable"
+// RainVisible reports whether the overview shows the rain band; a dry window
+// becomes a short footer note so the band's space goes to the other rows.
+func (v DashboardView) RainVisible() bool {
+	return v.Rain != nil && !v.Rain.Dry
+}
+
+// LayoutClass names the overview layout for CSS: "quiet" when only the tide
+// band is shown, so the temperature and tide can grow into the space.
+func (v DashboardView) LayoutClass() string {
+	var classes []string
+	if v.Horizontal {
+		classes = append(classes, "horizontal")
 	}
-	var sources []string
-	if snapshot.Weather.Stale {
-		sources = append(sources, "weather")
+	if !v.RainVisible() && v.BeachStatus == nil {
+		classes = append(classes, "quiet")
 	}
-	if snapshot.Tide.Stale {
-		sources = append(sources, "tide")
+	if v.Stale {
+		classes = append(classes, "stale")
 	}
-	if snapshot.Surf.Stale {
-		sources = append(sources, "surf")
-	}
-	if len(sources) == 0 {
-		return ""
-	}
-	return "Cached " + strings.Join(sources, " and ") + " data · updates unavailable"
+	return strings.Join(classes, " ")
 }
 
 func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {
@@ -259,14 +251,8 @@ func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {
 
 func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 	var notices []Notice
-	for _, alert := range weather.Alerts {
-		event := strings.TrimSpace(alert.Event)
-		// Small craft advisories concern boaters, not anyone reading this at home.
-		if event == "" || strings.Contains(strings.ToLower(event), "small craft") {
-			continue
-		}
-		notices = append(notices, Notice{Kind: "alert", Text: event})
-		break
+	if len(weather.Alerts) > 0 && strings.TrimSpace(weather.Alerts[0].Event) != "" {
+		notices = append(notices, Notice{Kind: "alert", Text: weather.Alerts[0].Event})
 	}
 
 	for _, hour := range weather.Hourly {
@@ -295,9 +281,6 @@ func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 
 	maxGust := weather.Current.WindGust
 	for _, hour := range weather.Hourly {
-		if time.Unix(hour.Dt, 0).Before(now.Truncate(time.Hour)) {
-			continue
-		}
 		if time.Unix(hour.Dt, 0).After(now.Add(12 * time.Hour)) {
 			break
 		}
@@ -313,6 +296,9 @@ func buildActionNotices(weather WeatherData, now time.Time) []Notice {
 		notices = append(notices, Notice{Kind: "temperature", Text: fmt.Sprintf("Feels like %.0f° — dress warmly", weather.Current.FeelsLike)})
 	}
 
+	if len(notices) > 2 {
+		return notices[:2]
+	}
 	return notices
 }
 
@@ -382,6 +368,29 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setDashboardHeaders(w, "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(output.Bytes())
+}
+
+// detailsHandler renders the surf, tide, and rain tables on their own page so
+// the overview stays a single screen.
+func detailsHandler(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
+	defer cancel()
+	snapshot, err := loadDashboardSnapshot(ctx, now)
+	if err != nil {
+		http.Error(w, "Weather data is temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	view := buildDashboardView(snapshot, r, now)
+	var output bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&output, "details.html", view); err != nil {
+		logJSON(logEntry{Timestamp: now.Format(time.RFC3339), Level: "ERROR", Message: fmt.Sprintf("Could not render details: %v", err)})
+		http.Error(w, "Could not render details", http.StatusInternalServerError)
+		return
+	}
 	setDashboardHeaders(w, "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(output.Bytes())

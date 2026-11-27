@@ -4,24 +4,27 @@ A web application that displays weather, tide, moon phase, and space launch info
 
 ## Features
 
-- Large-type overview readable from across the room: current temperature and
-  feels-like, condition and daily high/low; when rain starts (or stops) with
-  time-labeled hourly rain-chance bars; the
-  next high or low tide with today's tide curve, and a good-surf or super-low-tide
-  band when one applies
+- One-screen, large-type overview readable from across the room: current
+  temperature with today's high/low, when rain starts (or stops) with 12 hourly
+  rain-chance bars, the next high or low tide with today's tide curve, and a
+  good-surf or super-low-tide band when one applies. Each band has a large
+  pictogram (umbrella, tide arrow, waves) so it can be told apart without
+  reading its label. "Feels like" appears only when it differs by 5° or more.
+- Quiet days collapse: a dry 12 hours becomes a footer note, and with only the
+  tide to show the temperature and tide grow to fill the screen
+- Stale cached data is flagged in the footer
 - Tide predictions
-- Moon phase display
+- Moon phase on the details page
 - Sunrise and sunset times
 - Upcoming space launches
 - Conditional beach notices for good surf and upcoming daytime super-low tides
 - Best remaining surf window with wave height and period
-- Actionable rain, UV, wind, temperature, and weather-alert notices (small
-  craft advisories are omitted)
+- Actionable rain, UV, wind, temperature, and weather-alert notices
 - Internal source-freshness metrics for stale-data monitoring
 - Adaptive refresh timing for overnight hours and approaching events
 - Static SVG dashboard endpoint for screensaver integrations
 - Simple design optimized for Kindle displays
-- Scrollable surf, tide/beach, and hourly rain details with large section links
+- Surf, tide/beach, and hourly rain details on a separate `/details` page
 - Caching for API responses to reduce calls
 - OpenTelemetry tracing (OTLP exporter)
 
@@ -71,14 +74,13 @@ both conditions apply.
 
 ## Browsing forecast details
 
-Scroll down from the overview to see surf conditions, tides/beach, and rain
-details, tap a rain/tide/beach panel, or use the large Overview / Surf / Tides /
-Rain links. These are ordinary
-HTML links and tables, designed for the original Paperwhite browser without
-JavaScript or custom swipe gestures. When a section link is used, automatic
-refresh returns to that section. Scrolling alone does not change the selected
-section; refresh returns to the last section selected by a link (the overview by
-default).
+The overview fills exactly one screen and never scrolls. Tap the time in the
+bottom-right corner ("details") to open `/details`, which has surf conditions,
+tides/beach, and rain tables with large Overview / Surf / Tides / Rain links.
+These are ordinary HTML links and tables, designed for the original Paperwhite
+browser without JavaScript or custom swipe gestures. The details page refreshes
+back to the overview after 10 minutes, so a Kindle left there returns to the
+across-the-room view. The landscape flag (`?h`) is kept on every link.
 
 Surf details show up to 12 upcoming forecast hours of offshore wave height,
 period, direction, and matching wind forecasts. Tide details show today's NOAA
@@ -86,13 +88,6 @@ high/low predictions and heights relative to MLLW. Rain details show up to 12
 upcoming hours of precipitation probability and hourly amounts in inches.
 The current forecast hour is included. Unavailable optional sources show an
 explicit message, and cached fallback data is labeled with its last update time.
-The overview includes the weather update time, marks extrapolated tide times,
-and prioritizes weather warnings and wind over routine UV advice.
-The rain band is solid black only when rain is likely; dry and possible-rain
-forecasts use an outlined band. When weather data comes from the cache after a
-failed refresh, a black status bar names its age and the current temperature is
-greyed with an "as of" time. Type scales up on taller screens to fill the
-overview. In the surf table, the best surf window's hours are shaded.
 
 ## Build
 
@@ -238,8 +233,7 @@ kubectl describe deployment kindle-weather
 ## API Endpoints
 
 - `/` - Main weather display page
-- `/dashboard.svg` - Static 758×1024 version of the overview: rain, tide, and
-  beach bands, alerts, and cached-data status (`?h` scales it into 1024×758)
+- `/dashboard.svg` - Static 758×1024 dashboard (`?h` for 1024×758)
 - `/css/*` - Static CSS files
 - `/font/*` - Weather icon fonts
 - `/health` - Process liveness
@@ -260,17 +254,3 @@ The suite renders the real Go HTML template, tide SVG, CSS, and icon fonts with 
 Chromium and WebKit cover 600×800 and 758×1024 portrait screens plus 1024×758 landscape, with reduced viewport heights of 660, 880, and 600 pixels to reserve space for browser controls. These are CSS viewport assumptions, not identification of a particular Kindle model. Tests include the photographed summary, longer text, wrapped forecast labels, alerts, a launch, and missing optional sections. They assert no row overlap, clipped labels, horizontal overflow, or footer below the screen. CI saves screenshots and traces on failure.
 
 Modern WebKit does not reproduce the Kindle's exact legacy engine or e-ink rendering; this suite catches layout regressions at the target dimensions but does not emulate the physical device.
-
-For browser inspection when a local listening port is unavailable, export the
-same production-template fixtures to a temporary directory:
-
-```bash
-KINDLE_LAYOUT_OUTPUT=/tmp/kindle-layout go test -run '^TestLayoutFixtureFiles$'
-```
-
-The exported HTML uses the normal `/css/` and `/font/` asset paths. A browser
-harness can route those requests to the repository assets. Fixtures cover rain
-uncertainty, cached data, missing sources, wide tide times, and both orientations.
-The overview includes four upcoming forecasts, notices above current conditions,
-full-width rain/tide/beach rows, and the selected section in navigation. It uses
-ordinary links and requires no JavaScript.

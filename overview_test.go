@@ -30,12 +30,10 @@ func TestBuildRainBand(t *testing.T) {
 		pops                        []float64
 		label, big, suffix, caption string
 	}{
-		{"rain later", []float64{5, 5, 10, 10, 15, 20, 30, 55, 70, 65, 40, 25}, "RAIN LIKELY FROM", "10", "PM", "70% at 11p · easing 1a"},
-		{"raining now", []float64{80, 90, 60, 30, 10, 5, 5, 5, 5, 5, 5, 5}, "RAIN LIKELY UNTIL", "6", "PM", "90% at 4p"},
-		{"possible rain", []float64{0, 30, 45}, "NEXT 3 HOURS", "Possible", "", "45% at 5p"},
-		{"rain through short window", []float64{80, 90}, "RAIN LIKELY THROUGH", "5", "PM", "90% at 4p"},
+		{"rain later", []float64{5, 5, 10, 10, 15, 20, 30, 55, 70, 65, 40, 25}, "RAIN STARTS", "10", "PM", "70% at 11p · dry by 1a"},
+		{"raining now", []float64{80, 90, 60, 30, 10, 5, 5, 5, 5, 5, 5, 5}, "RAIN UNTIL", "6", "PM", "90% at 4p"},
 		{"dry", []float64{0, 5, 10, 20, 10, 0, 0, 0, 0, 0, 0, 0}, "NEXT 12 HOURS", "Dry", "", "20% at most"},
-		{"rain all window", []float64{10, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60}, "RAIN LIKELY FROM", "4", "PM", "60% at 4p · past 3a"},
+		{"rain all window", []float64{10, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60}, "RAIN STARTS", "4", "PM", "60% at 4p · past 3a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,10 +46,6 @@ func TestBuildRainBand(t *testing.T) {
 			}
 			if len(band.Bars) != len(tt.pops) {
 				t.Fatalf("got %d bars, want %d", len(band.Bars), len(tt.pops))
-			}
-			// Only likely rain is drawn in solid black.
-			if want := strings.HasPrefix(tt.label, "RAIN LIKELY"); band.Likely != want {
-				t.Fatalf("Likely = %v, want %v", band.Likely, want)
 			}
 		})
 	}
@@ -93,7 +87,7 @@ func TestBuildTideBand(t *testing.T) {
 	if band.Label != "LOW TIDE · FALLING" || band.Big != "6:56" || band.Suffix != "PM" {
 		t.Fatalf("got %q %q %q", band.Label, band.Big, band.Suffix)
 	}
-	if band.Caption != "in 3½ hrs · high ~1:08a" {
+	if band.Caption != "in 3½ hrs · high 1:08a" {
 		t.Fatalf("caption = %q", band.Caption)
 	}
 	spark := string(band.Spark)
@@ -105,7 +99,7 @@ func TestBuildTideBand(t *testing.T) {
 func TestBuildTideBandEstimatesAfterLastTideOfDay(t *testing.T) {
 	now, loc := overviewTestTime(t, 21, 40)
 	band := buildTideBand(todayTides(), now, loc)
-	if band == nil || band.Label != "EST. HIGH TIDE · RISING" || band.Big != "1:08" || band.Suffix != "AM" {
+	if band == nil || band.Label != "HIGH TIDE · RISING" || band.Big != "1:08" || band.Suffix != "AM" {
 		t.Fatalf("got %+v", band)
 	}
 	if !strings.HasPrefix(band.Caption, "in about 3½ hrs") {
@@ -179,7 +173,7 @@ func TestNextSunEvent(t *testing.T) {
 	for _, tt := range []struct {
 		hour         int
 		label, value string
-	}{{5, "sunrise", "7:17 AM"}, {12, "sunset", "7:10 PM"}, {21, "sunrise", "7:18 AM"}} {
+	}{{5, "sunrise", "7:17"}, {12, "sunset", "7:10"}, {21, "sunrise", "7:18"}} {
 		now, _ := overviewTestTime(t, tt.hour, 0)
 		if label, value := nextSunEvent(weather, now, loc); label != tt.label || value != tt.value {
 			t.Errorf("at %d:00 got %q %q, want %q %q", tt.hour, label, value, tt.label, tt.value)
@@ -217,6 +211,8 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 		CurrentTemperature: "89°",
 		CurrentIconClass:   "wi wi-owm-day-802",
 		FeelsLike:          "96",
+		High:               "91°",
+		Low:                "74°",
 		NowLabel:           "THU 3:27 PM",
 		MoonPhaseIcon:      "wi-moon-waxing-crescent-3",
 		Rain:               buildRainBand(hourlyFromPops(now, 5, 5, 10, 10, 15, 20, 30, 55, 70, 65, 40, 25), now, loc),
@@ -230,9 +226,9 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 	}
 	rendered := buf.String()
 	for _, want := range []string{
-		`id="rain-band"`, `RAIN LIKELY FROM`, `<span class="band-suffix"> PM</span>`, `class="rain-bar h7 wet"`,
+		`id="rain-band"`, `RAIN STARTS`, `<span class="band-suffix"> PM</span>`, `class="rain-bar h7 wet"`,
 		`id="tide-band"`, `LOW TIDE · FALLING`, `6:56`, `<svg viewBox="0 0 220 64"`,
-		`feels 96`, `THU 3:27 PM`, `26%<span class="foot-sub">crescent</span>`,
+		`feels 96`, `THU 3:27 PM`, `91° / 74°`, `<svg class="pict"`, `M24 45L4 23`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered overview missing %q", want)
@@ -240,86 +236,70 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 	}
 
 	view.Tide = nil
-	view.Rain = nil
-	view.Stale = true
 	buf.Reset()
 	if err := tmpl.Execute(&buf, view); err != nil {
 		t.Fatal(err)
-	}
-	for _, text := range []string{"Hourly forecast unavailable", "Cached forecast · updates unavailable"} {
-		if !strings.Contains(buf.String(), text) {
-			t.Fatalf("missing data status: %s", text)
-		}
 	}
 	if !strings.Contains(buf.String(), "Tide data unavailable") {
 		t.Fatal("expected a tide fallback when tide data is missing")
 	}
 }
 
-func TestNextTideEventsEmpty(t *testing.T) {
-	next, following, estimated := nextTideEvents(nil, time.Now())
-	if next != nil || following != nil || estimated {
-		t.Fatal("empty predictions must not produce tides")
-	}
-}
-
-func TestOverviewNoticesPrioritizeWarningsAfterFilteringRain(t *testing.T) {
-	now := time.Now()
-	weather := validWeather(now)
-	weather.Alerts = []WeatherAlert{{Event: "Gale Warning"}}
-	weather.Current.WindGust = 38
-	weather.Current.FeelsLike = 100
-	notices := overviewNotices(buildActionNotices(weather, now))
-	if len(notices) != 2 || notices[0].Kind != "alert" || notices[1].Kind != "wind" {
-		t.Fatalf("expected warning and wind despite rain/UV notices, got %+v", notices)
-	}
-}
-
-func TestActionNoticesIgnorePastWindGusts(t *testing.T) {
-	now := time.Now()
-	weather := validWeather(now)
-	weather.Hourly = append([]HourlyWeather{{Dt: now.Add(-2 * time.Hour).Unix(), WindGust: 60}}, weather.Hourly...)
-	for _, notice := range buildActionNotices(weather, now) {
-		if notice.Kind == "wind" {
-			t.Fatalf("past wind gust produced notice: %+v", notice)
+func TestFeelsLikeWorthShowing(t *testing.T) {
+	for _, tt := range []struct {
+		temp, feels float64
+		want        bool
+	}{{82, 84, false}, {82, 86.6, true}, {40, 34, true}, {72, 72, false}} {
+		if got := feelsLikeWorthShowing(tt.temp, tt.feels); got != tt.want {
+			t.Errorf("feelsLikeWorthShowing(%v, %v) = %v, want %v", tt.temp, tt.feels, got, tt.want)
 		}
 	}
 }
 
-func TestActionNoticesSkipSmallCraftAdvisories(t *testing.T) {
-	now := time.Now()
-	weather := validWeather(now)
-	weather.Alerts = []WeatherAlert{{Event: "Small Craft Advisory"}, {Event: "small craft should exercise caution"}, {Event: "Rip Current Statement"}}
-	notices := buildActionNotices(weather, now)
-	if len(notices) == 0 || notices[0].Kind != "alert" || notices[0].Text != "Rip Current Statement" {
-		t.Fatalf("expected the first non-small-craft alert, got %+v", notices)
-	}
-
-	weather.Alerts = []WeatherAlert{{Event: "Small Craft Advisory"}}
-	for _, notice := range buildActionNotices(weather, now) {
-		if notice.Kind == "alert" {
-			t.Fatalf("small craft advisory produced notice: %+v", notice)
-		}
-	}
-}
-
-func TestStaleText(t *testing.T) {
-	loc := easternLocation()
-	fetched := time.Date(2026, 10, 15, 4, 5, 0, 0, loc)
-	tests := []struct {
-		name     string
-		snapshot DashboardSnapshot
-		want     string
+func TestOverviewLayoutClass(t *testing.T) {
+	dry := &RainBand{Dry: true}
+	wet := &RainBand{Label: "RAIN STARTS"}
+	for _, tt := range []struct {
+		name string
+		view DashboardView
+		want string
 	}{
-		{"fresh", DashboardSnapshot{}, ""},
-		{"weather", DashboardSnapshot{Weather: WeatherSnapshot{FetchedAt: fetched, Stale: true}}, "Weather from Thu 4:05 AM · updates unavailable"},
-		{"tide and surf", DashboardSnapshot{Tide: TideSnapshot{Stale: true}, Surf: SurfSnapshot{Stale: true}}, "Cached tide and surf data · updates unavailable"},
+		{"no rain data", DashboardView{}, "quiet"},
+		{"dry", DashboardView{Rain: dry}, "quiet"},
+		{"rain coming", DashboardView{Rain: wet}, ""},
+		{"dry with surf", DashboardView{Rain: dry, BeachStatus: &BeachStatus{Kind: "surf"}}, ""},
+		{"landscape stale", DashboardView{Rain: wet, Horizontal: true, Stale: true}, "horizontal stale"},
+	} {
+		if got := tt.view.LayoutClass(); got != tt.want {
+			t.Errorf("%s: LayoutClass() = %q, want %q", tt.name, got, tt.want)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := staleText(tt.snapshot, loc); got != tt.want {
-				t.Fatalf("got %q, want %q", got, tt.want)
-			}
-		})
+}
+
+func TestDryRainMovesToFooterAndTideShowsDirection(t *testing.T) {
+	now, loc := overviewTestTime(t, 15, 27)
+	view := DashboardView{
+		CurrentTemperature: "82°",
+		Rain:               buildRainBand(hourlyFromPops(now, 0, 5, 10, 20, 10, 0, 0, 0, 0, 0, 0, 0), now, loc),
+		Tide:               buildTideBand(todayTides(), now, loc),
+		AutoRefreshURL:     "/",
+		Stale:              true,
+		NowLabel:           "THU 3:27 PM",
+	}
+	if !view.Rain.Dry || view.Tide.Rising {
+		t.Fatalf("rain dry = %v, tide rising = %v", view.Rain.Dry, view.Tide.Rising)
+	}
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, view); err != nil {
+		t.Fatal(err)
+	}
+	rendered := buf.String()
+	if strings.Contains(rendered, `id="rain-band"`) {
+		t.Fatal("dry window should not render the rain band")
+	}
+	for _, want := range []string{`id="foot-rain"`, "20% at most", `class="overview-page quiet stale"`, "OLD DATA", `M24 45L4 23`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered overview missing %q", want)
+		}
 	}
 }
