@@ -17,6 +17,13 @@ func TestLayoutFixtureServer(t *testing.T) {
 	mux.Handle("/css/", http.FileServer(http.Dir(".")))
 	mux.Handle("/font/", http.FileServer(http.Dir(".")))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		page := "index.html"
+		if r.URL.Path == "/details" {
+			page = "details.html"
+		} else if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		view := DashboardView{
 			DetailLinks:        detailLinks(r),
 			SurfSummary:        "Best surf today: 9:00 AM–11:00 AM · 3.0 ft at 10 s · wind 8 mph",
@@ -44,6 +51,8 @@ func TestLayoutFixtureServer(t *testing.T) {
 			hourly = append(hourly, HourlyWeather{Dt: now.Truncate(time.Hour).Add(time.Duration(i) * time.Hour).Unix(), Pop: pop})
 		}
 		view.FeelsLike, view.NowLabel = "104", "THU 8:27 AM"
+		view.High, view.Low = "101°", "78°"
+		view.Stale = r.URL.Query().Has("stale")
 		view.Rain = buildRainBand(hourly, now, loc)
 		view.Tide = buildTideBand(tides, now, loc)
 		view.MoonPercent, view.MoonName = moonDescription(0.9)
@@ -51,7 +60,9 @@ func TestLayoutFixtureServer(t *testing.T) {
 		if r.URL.Query().Has("paperwhite1") {
 			// The physical 2012 Paperwhite photo exposed a time/caption collision.
 			view.CurrentTemperature = "82°"
-			view.FeelsLike, view.NowLabel = "87", "FRI 5:47 PM"
+			view.FeelsLike, view.NowLabel = "", "FRI 5:47 PM"
+			view.High, view.Low = "87°", "71°"
+			view.Rain.Dry = true
 			view.Rain.Big, view.Rain.Suffix, view.Rain.Caption = "Dry", "", "no rain expected"
 			view.Rain.Label = "NEXT 12 HOURS"
 			for i := range view.Rain.Bars {
@@ -95,7 +106,7 @@ func TestLayoutFixtureServer(t *testing.T) {
 			{Time: "4:38 AM", Type: "H", Height: 3}, {Time: "10:25 AM", Type: "L", Height: 0},
 			{Time: "5:13 PM", Type: "H", Height: 3}, {Time: "11:13 PM", Type: "L", Height: 0},
 		})
-		if err := tmpl.Execute(w, view); err != nil {
+		if err := tmpl.ExecuteTemplate(w, page, view); err != nil {
 			t.Error(err)
 		}
 	})

@@ -6,183 +6,147 @@
     <meta http-equiv="refresh" content="{{.AutoRefreshSeconds}};url={{.AutoRefreshURL}}">
     <meta name="viewport"
           content="{{if .Horizontal}}width=1024, initial-scale=1, maximum-scale=1, user-scalable=no{{else}}width=758, initial-scale=1, maximum-scale=1, user-scalable=no{{end}}">
-    <link rel="stylesheet" href="/css/kindle.css?v=11">
+    <link rel="stylesheet" href="/css/kindle.css?v=12">
     <link rel="stylesheet" href="/css/weather-icons.min.css?v=2">
     <link rel="icon" href="data:,">
 </head>
-<body class="{{if .Horizontal}}horizontal{{end}}">
-    <main id="page">
-        <div id="overview">
-        <header id="current-weather">
-            <div class="tempWrapper">
-                <div id="temp">{{.CurrentTemperature}}</div>
-            </div>
-            <div id="now">
-                <div id="iconWrapper" aria-hidden="true"><i id="icon" class="{{.CurrentIconClass}}"></i></div>
-                {{if .FeelsLike}}<div id="feels">feels {{.FeelsLike}}</div>{{end}}
-                {{if .NowLabel}}<div id="now-time">{{.NowLabel}}</div>{{end}}
-            </div>
-        </header>
-
-        {{with .Rain}}
-        <section id="rain-band" class="band inverse" aria-label="Rain">
-            <div class="band-row">
-                <div class="band-main">
-                    <div class="band-label">{{.Label}}</div>
-                    <div class="band-big">{{.Big}}{{if .Suffix}}<span class="band-suffix"> {{.Suffix}}</span>{{end}}</div>
-                </div>
-                <div class="band-side">
-                    <div class="rain-bars" aria-hidden="true">{{range .Bars}}<span class="rain-bar h{{.Bucket}} {{.Level}}"></span>{{end}}</div>
-                    <div class="band-caption">{{.Caption}}</div>
-                </div>
-            </div>
-        </section>
-        {{end}}
-
-        <section id="tide-band" class="band" aria-label="Next tide">
-            {{with .Tide}}
-            <div class="band-row">
-                <div class="band-main">
-                    <div class="band-label">{{.Label}}</div>
-                    <div class="band-big">{{.Big}}<span class="band-suffix"> {{.Suffix}}</span></div>
-                </div>
-                <div class="band-side">
-                    {{if .Spark}}<div class="tide-spark">{{.Spark}}</div>{{end}}
-                    <div class="band-caption">{{.Caption}}</div>
-                </div>
-            </div>
-            {{else}}
-            <div class="band-label">TIDES</div>
-            <div class="band-caption">Tide data unavailable</div>
-            {{end}}
-        </section>
-
-        {{if .BeachStatus}}
-        <section id="beach-status" class="band {{.BeachStatus.Kind}}" aria-label="Beach">
-            <div class="band-row">
-                <div class="band-main">
-                    <div class="band-label">
-                        {{if eq .BeachStatus.Kind "surf"}}
-                        <span class="surfboard-icon" aria-hidden="true">
-                            <svg viewBox="0 0 44 24" focusable="false">
-                                <path class="surfboard-outline" d="M2 10C7 3 16 1 22 1s15 2 20 9c-5 7-14 9-20 9S7 17 2 10z"></path>
-                                <path d="M4 10h36"></path>
-                                <path d="M29 18l5 5v-6"></path>
-                            </svg>
-                        </span>
-                        {{end}}
-                        {{if .BeachStatus.Label}}{{.BeachStatus.Label}}{{else if eq .BeachStatus.Kind "surf"}}SURF{{else}}BEACH{{end}}
-                    </div>
-                    {{if .BeachStatus.Big}}
-                    <div class="band-big">{{.BeachStatus.Big}}{{if .BeachStatus.Suffix}}<span class="band-suffix"> {{.BeachStatus.Suffix}}</span>{{end}}</div>
-                    {{else}}
-                    <div class="band-text">{{.BeachStatus.Text}}</div>
-                    {{end}}
-                </div>
-                {{if .BeachStatus.Detail}}<div class="band-side"><div class="band-caption">{{.BeachStatus.Detail}}</div></div>{{end}}
-            </div>
-        </section>
-        {{end}}
-
-        {{if .OverviewNotices}}
-        <section id="insights" aria-label="Alerts">
-            {{range .OverviewNotices}}<div class="insight notice {{.Kind}}">{{.Text}}</div>{{end}}
-        </section>
-        {{end}}
-
-        <footer id="footer">
-            <div id="moon" aria-label="Moon phase">
-                <i class="wi {{.MoonPhaseIcon}}" aria-hidden="true"></i>
-                {{if .MoonPercent}}<span class="foot-text">{{.MoonPercent}}<span class="foot-sub">{{.MoonName}}</span></span>{{end}}
-            </div>
-            <div id="sun">
-                {{if .SunEventTime}}
-                <i class="wi {{if eq .SunEventLabel "sunrise"}}wi-sunrise{{else}}wi-sunset{{end}}" aria-hidden="true"></i>
-                <span class="foot-text">{{.SunEventTime}}<span class="foot-sub">{{.SunEventLabel}}</span></span>
-                {{else}}
-                <span class="foot-text">{{.Sunset}}<span class="foot-sub">sunset</span></span>
-                {{end}}
-            </div>
-            <div id="launch-cell">
-            {{if .KennedyLaunch}}
-            <div id="launches" aria-label="Kennedy launch today">
-                <span class="rocket-icon" aria-hidden="true">
-                    <svg viewBox="0 0 32 32" focusable="false">
-                        <path d="M16 2c-3 3-4 7.5-4 10.5l4 4 4-4C20 9.5 19 5 16 2z"></path>
-                        <path d="M12 15l-6 6 3.5-.5L11 24l1 3 3-6-3-6z"></path>
-                        <path d="M20 15l3 6 1-3 3.5.5-6-6-1.5 2.5z"></path>
-                        <path d="M16 17l-3 3 3 10 3-10-3-3z"></path>
-                        <circle cx="16" cy="11" r="2"></circle>
-                    </svg>
-                </span>
-                <span class="foot-text"><span class="launch-time">{{.KennedyLaunch.Scheduled}}</span><span class="foot-sub">launch</span></span>
-            </div>
-            {{end}}
-            </div>
-        </footer>
-        {{template "detail-nav" .}}
+<body class="overview-page {{.LayoutClass}}">
+    {{/* One screen, no scrolling. A full-height CSS table lets the first row
+         absorb whatever height the browser toolbar leaves. */}}
+    {{if .Horizontal}}
+    <div id="overview" class="layout">
+        <div class="lrow">
+            <div class="lcell" id="hero-cell">{{template "hero" .}}</div>
+            <div class="lcell" id="bands-cell">{{template "bands" .}}</div>
         </div>
-
-        <section id="surf" class="detail-section" aria-labelledby="surf-title">
-            <h1 id="surf-title">Surf conditions</h1>
-            <p class="detail-summary">{{if .SurfSummary}}{{.SurfSummary}}{{else}}Surf forecast temporarily unavailable.{{end}}</p>
-            {{if .SurfHours}}
-            <table class="detail-table surf-table">
-                <caption>Upcoming hourly wave and wind forecast</caption>
-                <thead><tr><th scope="col">Time</th><th scope="col">Waves</th><th scope="col">Period</th><th scope="col">From</th><th scope="col">Wind</th></tr></thead>
-                <tbody>{{range .SurfHours}}<tr><th scope="row">{{.Time}}</th><td>{{.Height}}</td><td>{{.Period}}</td><td>{{.Direction}}</td><td>{{.Wind}}</td></tr>{{end}}</tbody>
-            </table>
-            <p class="detail-note">Offshore wave forecast; breaking waves at the beach may differ. Directions show where waves and wind come from.</p>
-            {{end}}
-            <p class="detail-note">Open-Meteo waves · OpenWeather wind{{if .SurfUpdated}}<br>{{.SurfUpdated}}{{end}}</p>
-            {{template "detail-nav" .}}
-        </section>
-
-        <section id="tides" class="detail-section" aria-labelledby="tides-title">
-            <h1 id="tides-title">Tides &amp; beach</h1>
-            <p class="detail-summary">Crescent Beach · Today's high and low tides</p>
-            {{if .TideEvents}}
-            <div class="detail-tide-chart">{{.TideSVG}}</div>
-            <table class="detail-table">
-                <caption>Today's tide times and heights</caption>
-                <thead><tr><th scope="col">Time</th><th scope="col">Tide</th><th scope="col">Height</th></tr></thead>
-                <tbody>{{range .TideEvents}}<tr><th scope="row">{{.Time}}</th><td>{{.Type}}</td><td>{{.Height}}</td></tr>{{end}}</tbody>
-            </table>
-            <p class="detail-note">Heights above mean lower low water (MLLW).</p>
-            {{else}}
-            <p class="detail-summary">Tide predictions temporarily unavailable.</p>
-            {{end}}
-            {{if .BeachStatus}}<p class="detail-summary">{{.BeachStatus.Text}}</p>{{end}}
-            <p class="detail-summary">Sunrise {{.Sunrise}} · Sunset {{.Sunset}}</p>
-            <p class="detail-note">NOAA · Station 8720218{{if .TideUpdated}}<br>{{.TideUpdated}}{{end}}</p>
-            {{template "detail-nav" .}}
-        </section>
-
-        <section id="rain" class="detail-section" aria-labelledby="rain-title">
-            <h1 id="rain-title">Rain forecast</h1>
-            {{if .Summary}}<p class="detail-summary">{{.Summary}}</p>{{end}}
-            {{if .RainHours}}
-            <table class="detail-table">
-                <caption>Upcoming hourly rain forecast</caption>
-                <thead><tr><th scope="col">Time</th><th scope="col">Chance</th><th scope="col">Amount</th></tr></thead>
-                <tbody>{{range .RainHours}}<tr><th scope="row">{{.Time}}</th><td>{{.Chance}}</td><td>{{.Amount}}</td></tr>{{end}}</tbody>
-            </table>
-            <p class="detail-note">Amounts are forecast totals for each hour, rounded to 0.01 inch.</p>
-            {{else}}
-            <p class="detail-summary">Hourly rain forecast temporarily unavailable.</p>
-            {{end}}
-            <p class="detail-note">OpenWeather{{if .RainUpdated}}<br>{{.RainUpdated}}{{end}}</p>
-            {{template "detail-nav" .}}
-        </section>
-    </main>
+        <div class="lrow fit">
+            <div class="lcell" id="footer-cell">{{template "footer" .}}</div>
+            <div class="lcell" id="insights-cell">{{template "insights" .}}</div>
+        </div>
+    </div>
+    {{else}}
+    <div id="overview" class="layout">
+        <div class="lrow"><div class="lcell" id="hero-cell">{{template "hero" .}}</div></div>
+        <div class="lrow fit"><div class="lcell" id="bands-cell">{{template "bands" .}}{{template "insights" .}}</div></div>
+        <div class="lrow fit"><div class="lcell" id="footer-cell">{{template "footer" .}}</div></div>
+    </div>
+    {{end}}
 </body>
 </html>
 
-{{define "detail-nav"}}
-<nav class="detail-nav" aria-label="Forecast sections">
-    <a href="{{.DetailLinks.overview}}">Overview</a>
-    <a href="{{.DetailLinks.surf}}">Surf</a>
-    <a href="{{.DetailLinks.tides}}">Tides</a>
-    <a href="{{.DetailLinks.rain}}">Rain</a>
-</nav>
+{{define "hero"}}
+<header id="current-weather">
+    <div class="tempWrapper"><div id="temp">{{.CurrentTemperature}}</div></div>
+    <div id="now">
+        <div id="iconWrapper" aria-hidden="true"><i id="icon" class="{{.CurrentIconClass}}"></i></div>
+        {{if .High}}<div id="hilo" aria-label="High {{.High}}, low {{.Low}}">{{.High}} / {{.Low}}</div>{{end}}
+        {{if .FeelsLike}}<div id="feels">feels {{.FeelsLike}}</div>{{end}}
+    </div>
+</header>
 {{end}}
+
+{{define "bands"}}
+{{if .RainVisible}}{{with .Rain}}
+<section id="rain-band" class="band inverse" aria-label="Rain">
+    <div class="band-row">
+        <div class="band-icon" aria-hidden="true">{{template "umbrella-icon"}}</div>
+        <div class="band-main">
+            <div class="band-label">{{.Label}}</div>
+            <div class="band-big">{{.Big}}{{if .Suffix}}<span class="band-suffix"> {{.Suffix}}</span>{{end}}</div>
+        </div>
+        <div class="band-side">
+            <div class="rain-bars" aria-hidden="true">{{range .Bars}}<span class="rain-bar h{{.Bucket}} {{.Level}}"></span>{{end}}</div>
+            <div class="band-caption">{{.Caption}}</div>
+        </div>
+    </div>
+</section>
+{{end}}{{end}}
+
+<section id="tide-band" class="band" aria-label="Next tide">
+    {{with .Tide}}
+    <div class="band-row">
+        <div class="band-icon" aria-hidden="true">{{if .Rising}}{{template "arrow-up-icon"}}{{else}}{{template "arrow-down-icon"}}{{end}}</div>
+        <div class="band-main">
+            <div class="band-label">{{.Label}}</div>
+            <div class="band-big">{{.Big}}<span class="band-suffix"> {{.Suffix}}</span></div>
+        </div>
+        <div class="band-side">
+            {{if .Spark}}<div class="tide-spark">{{.Spark}}</div>{{end}}
+            <div class="band-caption">{{.Caption}}</div>
+        </div>
+    </div>
+    {{else}}
+    <div class="band-label">TIDES</div>
+    <div class="band-caption">Tide data unavailable</div>
+    {{end}}
+</section>
+
+{{if .BeachStatus}}
+<section id="beach-status" class="band {{.BeachStatus.Kind}}" aria-label="Beach">
+    <div class="band-row">
+        <div class="band-icon" aria-hidden="true">{{if eq .BeachStatus.Kind "surf"}}{{template "surf-icon"}}{{else}}{{template "arrow-down-icon"}}{{end}}</div>
+        <div class="band-main">
+            <div class="band-label">{{if .BeachStatus.Label}}{{.BeachStatus.Label}}{{else if eq .BeachStatus.Kind "surf"}}SURF{{else}}BEACH{{end}}</div>
+            {{if .BeachStatus.Big}}
+            <div class="band-big">{{.BeachStatus.Big}}{{if .BeachStatus.Suffix}}<span class="band-suffix"> {{.BeachStatus.Suffix}}</span>{{end}}</div>
+            {{else}}
+            <div class="band-text">{{.BeachStatus.Text}}</div>
+            {{end}}
+        </div>
+        {{if .BeachStatus.Detail}}<div class="band-side"><div class="band-caption">{{.BeachStatus.Detail}}</div></div>{{end}}
+    </div>
+</section>
+{{end}}
+{{end}}
+
+{{define "insights"}}
+{{if .OverviewNotices}}
+<section id="insights" aria-label="Alerts">
+    {{range .OverviewNotices}}<div class="insight notice {{.Kind}}">{{.Text}}</div>{{end}}
+</section>
+{{end}}
+{{end}}
+
+{{define "footer"}}
+<footer id="footer">
+    {{if .Rain}}{{if .Rain.Dry}}
+    <div id="foot-rain" class="foot-cell" aria-label="Rain">
+        <span class="foot-text">Dry<span class="foot-sub">{{.Rain.Caption}}</span></span>
+    </div>
+    {{end}}{{end}}
+    <div id="sun" class="foot-cell">
+        {{if .SunEventTime}}
+        <i class="wi {{if eq .SunEventLabel "sunrise"}}wi-sunrise{{else}}wi-sunset{{end}}" aria-hidden="true"></i>
+        <span class="foot-text">{{.SunEventTime}}<span class="foot-sub">{{.SunEventLabel}}</span></span>
+        {{else if .Sunset}}
+        <span class="foot-text">{{.Sunset}}<span class="foot-sub">sunset</span></span>
+        {{end}}
+    </div>
+    {{if .KennedyLaunch}}
+    <div id="launches" class="foot-cell" aria-label="Kennedy launch today">
+        <span class="rocket-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" focusable="false">
+                <path d="M16 2c-3 3-4 7.5-4 10.5l4 4 4-4C20 9.5 19 5 16 2z"></path>
+                <path d="M12 15l-6 6 3.5-.5L11 24l1 3 3-6-3-6z"></path>
+                <path d="M20 15l3 6 1-3 3.5.5-6-6-1.5 2.5z"></path>
+                <path d="M16 17l-3 3 3 10 3-10-3-3z"></path>
+                <circle cx="16" cy="11" r="2"></circle>
+            </svg>
+        </span>
+        <span class="foot-text"><span class="launch-time">{{.KennedyLaunch.Scheduled}}</span><span class="foot-sub">launch</span></span>
+    </div>
+    {{end}}
+    <div id="updated" class="foot-cell">
+        <a id="details-link" href="{{.DetailLinks.surf}}">
+            <span class="foot-time">{{if .NowLabel}}{{.NowLabel}}{{end}}</span>
+            <span class="foot-sub">{{if .Stale}}<span class="stale-flag">OLD DATA</span> · {{end}}details</span>
+        </a>
+    </div>
+</footer>
+{{end}}
+
+{{/* Pictograms read from across the room where the band labels cannot. */}}
+{{define "umbrella-icon"}}<svg class="pict" viewBox="0 0 48 48" focusable="false"><path class="pict-fill" d="M3 24C3 12 13 4 24 4s21 8 21 20c-2.5-2.5-5-2.5-7 0-2-2.5-5-2.5-7 0-2-2.5-5-2.5-7 0-2-2.5-5-2.5-7 0-2-2.5-4.5-2.5-7 0z"></path><path class="pict-line" d="M24 24v15c0 5-7 5-7 0"></path></svg>{{end}}
+{{define "arrow-up-icon"}}<svg class="pict" viewBox="0 0 48 48" focusable="false"><path class="pict-fill" d="M24 3L44 25H32V45H16V25H4z"></path></svg>{{end}}
+{{define "arrow-down-icon"}}<svg class="pict" viewBox="0 0 48 48" focusable="false"><path class="pict-fill" d="M24 45L4 23H16V3H32V23H44z"></path></svg>{{end}}
+{{define "surf-icon"}}<svg class="pict" viewBox="0 0 48 48" focusable="false"><path class="pict-line" d="M3 16c4-6 8-6 11 0s7 6 10 0 7-6 10 0 7 6 11 0"></path><path class="pict-line" d="M3 30c4-6 8-6 11 0s7 6 10 0 7-6 10 0 7 6 11 0"></path><path class="pict-line" d="M3 43c4-5 8-5 11 0s7 5 10 0 7-5 10 0 7 5 11 0"></path></svg>{{end}}

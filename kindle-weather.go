@@ -146,7 +146,7 @@ func init() {
 	funcs := template.FuncMap{
 		"getIconClassName": getIconClassName,
 	}
-	tmpl, err = template.New("index.html").Funcs(funcs).ParseFS(templatesFS, "templates/index.html")
+	tmpl, err = template.New("index.html").Funcs(funcs).ParseFS(templatesFS, "templates/index.html", "templates/details.html")
 	if err != nil {
 		log.Fatalf("failed to parse templates: %v", err)
 	}
@@ -258,15 +258,14 @@ func setupOpenTelemetry(ctx context.Context) (func(context.Context) error, error
 	return tp.Shutdown, nil
 }
 
+// buildAutoRefreshURL always returns to the overview, so a Kindle left on the
+// details page goes back to the across-the-room view on its next refresh.
 func buildAutoRefreshURL(r *http.Request, refreshToken int64) string {
 	q := r.URL.Query()
+	q.Del("section")
 	q.Set("refresh", strconv.FormatInt(refreshToken, 10))
 
-	return (&url.URL{
-		Path:     r.URL.Path,
-		RawQuery: q.Encode(),
-		Fragment: detailSection(q.Get("section")),
-	}).String()
+	return (&url.URL{Path: "/", RawQuery: q.Encode()}).String()
 }
 
 func logJSON(entry logEntry) {
@@ -388,6 +387,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", loggingMiddleware(otelhttp.NewHandler(http.HandlerFunc(handler), "GET /")))
+	mux.Handle("GET /details", loggingMiddleware(otelhttp.NewHandler(http.HandlerFunc(detailsHandler), "GET /details")))
 	mux.Handle("GET /dashboard.svg", loggingMiddleware(otelhttp.NewHandler(http.HandlerFunc(dashboardSVGHandler), "GET /dashboard.svg")))
 	mux.Handle("GET /css/", loggingMiddleware(otelhttp.NewHandler(http.StripPrefix("/css/", http.FileServer(http.Dir("css"))), "GET /css")))
 	mux.Handle("GET /font/", loggingMiddleware(otelhttp.NewHandler(http.StripPrefix("/font/", http.FileServer(http.Dir("font"))), "GET /font")))

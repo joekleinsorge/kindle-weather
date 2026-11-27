@@ -35,17 +35,36 @@ func TestForecastDetails(t *testing.T) {
 }
 
 func TestDetailNavigationPreservesOrientationAndRefresh(t *testing.T) {
-	r := httptest.NewRequest("GET", "/?h&section=surf", nil)
+	r := httptest.NewRequest("GET", "/details?h&refresh=9&section=surf", nil)
 	links := detailLinks(r)
-	if !strings.Contains(links["rain"], "h=") || !strings.HasSuffix(links["rain"], "section=rain#rain") {
+	if links["rain"] != "/details?h=#rain" {
 		t.Fatalf("rain link = %q", links["rain"])
 	}
-	if got := buildAutoRefreshURL(r, 123); !strings.HasSuffix(got, "section=surf#surf") {
+	if links["overview"] != "/?h=" {
+		t.Fatalf("overview link = %q", links["overview"])
+	}
+	// Refreshing from the details page returns to the overview.
+	if got := buildAutoRefreshURL(r, 123); got != "/?h=&refresh=123" {
 		t.Fatalf("refresh URL = %q", got)
 	}
-	r = httptest.NewRequest("GET", "/?section=unknown", nil)
-	if strings.Contains(buildAutoRefreshURL(r, 123), "#") {
-		t.Fatal("unknown section became a fragment")
+}
+
+func TestDetailsTemplateRendersTablesAndReturnsToOverview(t *testing.T) {
+	view := DashboardView{
+		DetailLinks:    detailLinks(httptest.NewRequest("GET", "/details", nil)),
+		AutoRefreshURL: "/?refresh=1",
+		Summary:        "Clear skies",
+		TideEvents:     []TideEventView{{Time: "3:17 AM", Type: "Low", Height: "0.1 ft"}},
+		MoonPercent:    "26%", MoonName: "crescent",
+	}
+	var buf strings.Builder
+	if err := tmpl.ExecuteTemplate(&buf, "details.html", view); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`content="600;url=/?refresh=1"`, `id="surf"`, `id="tides"`, `id="rain"`, "3:17 AM", "Clear skies", "Moon 26% lit · crescent"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Fatalf("details page missing %q", want)
+		}
 	}
 }
 

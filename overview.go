@@ -17,6 +17,8 @@ const (
 	rainBandHours     = 12
 	rainLikelyPercent = 50
 	rainMaybePercent  = 25
+	// Show "feels like" only when it differs from the temperature by this much.
+	feelsLikeMinDifference = 5
 	// Average time between a high and the following low (or vice versa) for a
 	// semidiurnal tide. Used only to estimate the next event after today's last one.
 	halfTidalCycle = 6*time.Hour + 12*time.Minute + 30*time.Second
@@ -28,6 +30,7 @@ type RainBar struct {
 }
 
 type RainBand struct {
+	Dry     bool // no likely rain in the window; the overview shows a footer note instead of a band
 	Label   string
 	Big     string
 	Suffix  string
@@ -36,6 +39,7 @@ type RainBand struct {
 }
 
 type TideBand struct {
+	Rising  bool // the next event is a high tide
 	Label   string
 	Big     string
 	Suffix  string
@@ -87,6 +91,7 @@ func buildRainBand(hourly []HourlyWeather, now time.Time, loc *time.Location) *R
 	}
 
 	if startIdx < 0 {
+		band.Dry = true
 		band.Label = "NEXT 12 HOURS"
 		band.Big = "Dry"
 		band.Caption = "no rain expected"
@@ -147,6 +152,7 @@ func buildTideBand(predictions []TidePrediction, now time.Time, loc *time.Locati
 
 	band := &TideBand{Label: "LOW TIDE · FALLING"}
 	if next.Type == "H" {
+		band.Rising = true
 		band.Label = "HIGH TIDE · RISING"
 	}
 	band.Big, band.Suffix = next.Time.Format("3:04"), next.Time.Format("PM")
@@ -351,6 +357,12 @@ func untilText(d time.Duration) string {
 		return "in 1 hr"
 	}
 	return "in " + text + " hrs"
+}
+
+// feelsLikeWorthShowing hides "feels like" when it is within a few degrees of
+// the actual temperature, where it only adds clutter.
+func feelsLikeWorthShowing(temp, feelsLike float64) bool {
+	return math.Abs(math.Round(feelsLike)-math.Round(temp)) >= feelsLikeMinDifference
 }
 
 func overviewNotices(notices []Notice) []Notice {

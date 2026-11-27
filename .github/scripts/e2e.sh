@@ -108,17 +108,26 @@ wait_for_http "${MOCK_URL}/health" "mock api"
 
 start_app "/tide"
 curl -fsS "${APP_URL}/" > "${TMPDIR}/page.html"
+curl -fsS "${APP_URL}/details" > "${TMPDIR}/details.html"
 curl -fsS "${APP_URL}/css/kindle.css" > "${TMPDIR}/kindle.css"
 curl -fsS "${APP_URL}/metrics" > "${TMPDIR}/metrics.txt"
 curl -fsS "${APP_URL}/dashboard.svg" > "${TMPDIR}/dashboard.svg"
 curl -fsS "${APP_URL}/ready" > "${TMPDIR}/ready.json"
 assert_contains "${TMPDIR}/page.html" "Weather &amp; Tide"
-assert_contains "${TMPDIR}/page.html" "Clear skies"
-assert_contains "${TMPDIR}/page.html" "3:17 AM"
-assert_contains "${TMPDIR}/page.html" "9:24 AM"
 assert_contains "${TMPDIR}/page.html" "id=\"launches\""
-assert_contains "${TMPDIR}/page.html" "id=\"rain-band\""
 assert_contains "${TMPDIR}/page.html" "id=\"tide-band\""
+assert_contains "${TMPDIR}/page.html" "href=\"/details#surf\""
+if ! grep -Eq 'id="(rain-band|foot-rain)"' "${TMPDIR}/page.html"; then
+  echo "Expected a rain band or a dry footer note on the overview" >&2
+  exit 1
+fi
+if grep -Fq 'class="detail-section"' "${TMPDIR}/page.html"; then
+  echo "Expected detail tables to stay off the one-screen overview" >&2
+  exit 1
+fi
+assert_contains "${TMPDIR}/details.html" "Clear skies"
+assert_contains "${TMPDIR}/details.html" "3:17 AM"
+assert_contains "${TMPDIR}/details.html" "9:24 AM"
 if grep -Fq "Tomorrow" "${TMPDIR}/page.html"; then
   echo "Expected tomorrow data to remain off the Kindle dashboard" >&2
   exit 1
@@ -138,7 +147,6 @@ stop_app
 start_app "/tide-empty"
 curl -fsS "${APP_URL}/" > "${TMPDIR}/page-no-tide.html"
 assert_contains "${TMPDIR}/page-no-tide.html" "Weather &amp; Tide"
-assert_contains "${TMPDIR}/page-no-tide.html" "Clear skies"
 assert_contains "${TMPDIR}/page-no-tide.html" "Tide data unavailable"
 stop_app
 

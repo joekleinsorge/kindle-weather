@@ -19,26 +19,22 @@ type TideEventView struct {
 	Time, Type, Height string
 }
 
-// Ordinary links work without JavaScript. The section in the query lets the
-// server include the same anchor in the automatic refresh URL.
+// detailsReturnSeconds is how long the details page stays up before it
+// refreshes back to the overview.
+const detailsReturnSeconds = 600
+
+// detailLinks are ordinary links that work without JavaScript. The overview
+// lives at / and the surf, tide, and rain tables at /details; the query string
+// (for example the landscape flag) is kept on both.
 func detailLinks(r *http.Request) map[string]string {
-	links := make(map[string]string)
-	for _, section := range []string{"overview", "surf", "tides", "rain"} {
-		q := r.URL.Query()
-		q.Del("refresh")
-		q.Set("section", section)
-		links[section] = (&url.URL{Path: r.URL.Path, RawQuery: q.Encode(), Fragment: section}).String()
+	q := r.URL.Query()
+	q.Del("refresh")
+	q.Del("section")
+	links := map[string]string{"overview": (&url.URL{Path: "/", RawQuery: q.Encode()}).String()}
+	for _, section := range []string{"surf", "tides", "rain"} {
+		links[section] = (&url.URL{Path: "/details", RawQuery: q.Encode(), Fragment: section}).String()
 	}
 	return links
-}
-
-func detailSection(section string) string {
-	switch section {
-	case "overview", "surf", "tides", "rain":
-		return section
-	default:
-		return ""
-	}
 }
 
 func populateDetails(view *DashboardView, snapshot DashboardSnapshot, now time.Time) {

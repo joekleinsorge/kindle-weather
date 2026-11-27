@@ -59,6 +59,8 @@ type DashboardView struct {
 	CurrentTemperature string
 	CurrentIconClass   string
 	FeelsLike          string
+	High               string
+	Low                string
 	NowLabel           string
 	Rain               *RainBand
 	Tide               *TideBand
@@ -91,6 +93,9 @@ type DashboardView struct {
 	AutoRefreshSeconds int
 	AutoRefreshURL     string
 }
+
+// DetailsReturnSeconds is exposed to the details template.
+func (DashboardView) DetailsReturnSeconds() int { return detailsReturnSeconds }
 
 func loadDashboardSnapshot(ctx context.Context, now time.Time) (DashboardSnapshot, error) {
 	var snapshot DashboardSnapshot
@@ -193,13 +198,40 @@ func buildDashboardView(snapshot DashboardSnapshot, r *http.Request, now time.Ti
 func populateOverview(view *DashboardView, snapshot DashboardSnapshot, now time.Time) {
 	weather := snapshot.Weather.Data
 	loc := surfLocation(weather)
-	view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
+	if feelsLikeWorthShowing(weather.Current.Temp, weather.Current.FeelsLike) {
+		view.FeelsLike = fmt.Sprintf("%.0f", weather.Current.FeelsLike)
+	}
+	if today := weather.Daily[0].Temp; today.Max != 0 || today.Min != 0 {
+		view.High, view.Low = fmt.Sprintf("%.0f°", today.Max), fmt.Sprintf("%.0f°", today.Min)
+	}
 	view.NowLabel = strings.ToUpper(now.In(loc).Format("Mon 3:04 PM"))
 	view.Rain = buildRainBand(weather.Hourly, now, loc)
 	view.Tide = buildTideBand(snapshot.Tide.Data.Predictions, now, easternLocation())
 	view.OverviewNotices = overviewNotices(view.Notices)
 	view.MoonPercent, view.MoonName = moonDescription(weather.Daily[0].MoonPhase)
 	view.SunEventLabel, view.SunEventTime = nextSunEvent(weather, now, loc)
+}
+
+// RainVisible reports whether the overview shows the rain band; a dry window
+// becomes a short footer note so the band's space goes to the other rows.
+func (v DashboardView) RainVisible() bool {
+	return v.Rain != nil && !v.Rain.Dry
+}
+
+// LayoutClass names the overview layout for CSS: "quiet" when only the tide
+// band is shown, so the temperature and tide can grow into the space.
+func (v DashboardView) LayoutClass() string {
+	var classes []string
+	if v.Horizontal {
+		classes = append(classes, "horizontal")
+	}
+	if !v.RainVisible() && v.BeachStatus == nil {
+		classes = append(classes, "quiet")
+	}
+	if v.Stale {
+		classes = append(classes, "stale")
+	}
+	return strings.Join(classes, " ")
 }
 
 func recordSourceAges(snapshot DashboardSnapshot, now time.Time) {
@@ -336,6 +368,29 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setDashboardHeaders(w, "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(output.Bytes())
+}
+
+// detailsHandler renders the surf, tide, and rain tables on their own page so
+// the overview stays a single screen.
+func detailsHandler(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
+	defer cancel()
+	snapshot, err := loadDashboardSnapshot(ctx, now)
+	if err != nil {
+		http.Error(w, "Weather data is temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	view := buildDashboardView(snapshot, r, now)
+	var output bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&output, "details.html", view); err != nil {
+		logJSON(logEntry{Timestamp: now.Format(time.RFC3339), Level: "ERROR", Message: fmt.Sprintf("Could not render details: %v", err)})
+		http.Error(w, "Could not render details", http.StatusInternalServerError)
+		return
+	}
 	setDashboardHeaders(w, "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(output.Bytes())

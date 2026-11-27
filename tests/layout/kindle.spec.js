@@ -28,6 +28,7 @@ for (const scenario of ['paperwhite1', 'paperwhite1&wide-time']) {
         if (element.scrollWidth > element.clientWidth + 1) errors.push(`horizontal overflow in ${element.className}`);
       }
       if (document.documentElement.scrollWidth > innerWidth) errors.push('page overflows horizontally');
+      if (document.documentElement.scrollHeight > innerHeight + 1) errors.push('overview scrolls');
       if (document.querySelectorAll('script').length) errors.push('dashboard requires JavaScript');
       return errors;
     });
@@ -60,6 +61,10 @@ for (const scenario of ['', 'long', 'minimal']) {
       }
       const bottom = Math.max(...rows.map(([, box]) => box.bottom));
       if (bottom > innerHeight) errors.push(`overview ends at ${bottom}, viewport ends at ${innerHeight}`);
+      // The overview is a single screen: nothing below it to scroll to.
+      if (document.documentElement.scrollHeight > innerHeight + 1)
+        errors.push(`page scrolls: ${document.documentElement.scrollHeight} > ${innerHeight}`);
+      if (document.querySelector('.detail-section')) errors.push('detail tables belong on /details');
       if (document.documentElement.scrollWidth > innerWidth) errors.push('horizontal overflow');
       // Check individual labels as well as row boxes: clipped text can fit inside a broken row.
       for (const element of document.querySelectorAll('#temp, #now, .band-main, .band-side, .band-label, .band-big, .band-caption, .band-text, .insight, #moon, #sun, #launch-cell')) {
@@ -76,27 +81,31 @@ for (const scenario of ['', 'long', 'minimal']) {
   });
 }
 
-test('detail links and tables work without JavaScript', async ({ browser }, testInfo) => {
+test('details page links work without JavaScript and refresh back to the overview', async ({ browser }, testInfo) => {
   const landscape = testInfo.project.name.includes('landscape');
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: testInfo.project.use.viewport });
   const page = await context.newPage();
   await page.goto(`/?${landscape ? 'h&' : ''}`);
-  for (const [label, id] of [['Surf', 'surf'], ['Tides', 'tides'], ['Rain', 'rain'], ['Overview', 'overview']]) {
+  await page.locator('#details-link').click();
+  await expect(page).toHaveURL(/\/details(\?.*)?#surf$/);
+  for (const [label, id] of [['Tides', 'tides'], ['Rain', 'rain'], ['Surf', 'surf']]) {
     await page.locator('nav').first().getByRole('link', { name: label, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`section=${id}#${id}$`));
+    await expect(page).toHaveURL(new RegExp(`/details(\\?.*)?#${id}$`));
     if (landscape) expect(new URL(page.url()).searchParams.has('h')).toBeTruthy();
-    const section = page.locator(`#${id}`);
-    const box = await section.boundingBox();
+    const box = await page.locator(`#${id}`).boundingBox();
     // The final section may sit below the top when the page cannot scroll farther.
     expect(box.y).toBeGreaterThanOrEqual(-1);
     expect(box.y).toBeLessThan(testInfo.project.use.viewport.height - 40);
-    await expect(page.locator('meta[http-equiv="refresh"]')).toHaveAttribute('content', new RegExp(`section=${id}#${id}$`));
   }
+  // A Kindle left on the details page returns to the overview on refresh.
+  await expect(page.locator('meta[http-equiv="refresh"]')).toHaveAttribute('content', /^600;url=\/\?/);
+  await page.locator('nav').first().getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(page.locator('#overview')).toBeVisible();
   await context.close();
 });
 
 test('detail tables stay readable within the page width', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/details');
   const problems = await page.evaluate(() => {
     const errors = [];
     for (const element of document.querySelectorAll('.detail-table th, .detail-table td, .detail-nav a, .detail-section')) {

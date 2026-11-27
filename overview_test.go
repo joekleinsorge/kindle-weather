@@ -211,6 +211,8 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 		CurrentTemperature: "89°",
 		CurrentIconClass:   "wi wi-owm-day-802",
 		FeelsLike:          "96",
+		High:               "91°",
+		Low:                "74°",
 		NowLabel:           "THU 3:27 PM",
 		MoonPhaseIcon:      "wi-moon-waxing-crescent-3",
 		Rain:               buildRainBand(hourlyFromPops(now, 5, 5, 10, 10, 15, 20, 30, 55, 70, 65, 40, 25), now, loc),
@@ -226,7 +228,7 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 	for _, want := range []string{
 		`id="rain-band"`, `RAIN STARTS`, `<span class="band-suffix"> PM</span>`, `class="rain-bar h7 wet"`,
 		`id="tide-band"`, `LOW TIDE · FALLING`, `6:56`, `<svg viewBox="0 0 220 64"`,
-		`feels 96`, `THU 3:27 PM`, `26%<span class="foot-sub">crescent</span>`,
+		`feels 96`, `THU 3:27 PM`, `91° / 74°`, `<svg class="pict"`, `M24 45L4 23`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered overview missing %q", want)
@@ -240,5 +242,64 @@ func TestIndexTemplateRendersOverviewBands(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "Tide data unavailable") {
 		t.Fatal("expected a tide fallback when tide data is missing")
+	}
+}
+
+func TestFeelsLikeWorthShowing(t *testing.T) {
+	for _, tt := range []struct {
+		temp, feels float64
+		want        bool
+	}{{82, 84, false}, {82, 86.6, true}, {40, 34, true}, {72, 72, false}} {
+		if got := feelsLikeWorthShowing(tt.temp, tt.feels); got != tt.want {
+			t.Errorf("feelsLikeWorthShowing(%v, %v) = %v, want %v", tt.temp, tt.feels, got, tt.want)
+		}
+	}
+}
+
+func TestOverviewLayoutClass(t *testing.T) {
+	dry := &RainBand{Dry: true}
+	wet := &RainBand{Label: "RAIN STARTS"}
+	for _, tt := range []struct {
+		name string
+		view DashboardView
+		want string
+	}{
+		{"no rain data", DashboardView{}, "quiet"},
+		{"dry", DashboardView{Rain: dry}, "quiet"},
+		{"rain coming", DashboardView{Rain: wet}, ""},
+		{"dry with surf", DashboardView{Rain: dry, BeachStatus: &BeachStatus{Kind: "surf"}}, ""},
+		{"landscape stale", DashboardView{Rain: wet, Horizontal: true, Stale: true}, "horizontal stale"},
+	} {
+		if got := tt.view.LayoutClass(); got != tt.want {
+			t.Errorf("%s: LayoutClass() = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestDryRainMovesToFooterAndTideShowsDirection(t *testing.T) {
+	now, loc := overviewTestTime(t, 15, 27)
+	view := DashboardView{
+		CurrentTemperature: "82°",
+		Rain:               buildRainBand(hourlyFromPops(now, 0, 5, 10, 20, 10, 0, 0, 0, 0, 0, 0, 0), now, loc),
+		Tide:               buildTideBand(todayTides(), now, loc),
+		AutoRefreshURL:     "/",
+		Stale:              true,
+		NowLabel:           "THU 3:27 PM",
+	}
+	if !view.Rain.Dry || view.Tide.Rising {
+		t.Fatalf("rain dry = %v, tide rising = %v", view.Rain.Dry, view.Tide.Rising)
+	}
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, view); err != nil {
+		t.Fatal(err)
+	}
+	rendered := buf.String()
+	if strings.Contains(rendered, `id="rain-band"`) {
+		t.Fatal("dry window should not render the rain band")
+	}
+	for _, want := range []string{`id="foot-rain"`, "20% at most", `class="overview-page quiet stale"`, "OLD DATA", `M24 45L4 23`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered overview missing %q", want)
+		}
 	}
 }

@@ -4,12 +4,17 @@ A web application that displays weather, tide, moon phase, and space launch info
 
 ## Features
 
-- Large-type overview readable from across the room: current temperature and
-  feels-like, when rain starts (or stops) with 12 hourly rain-chance bars, the
-  next high or low tide with today's tide curve, and a good-surf or super-low-tide
-  band when one applies
+- One-screen, large-type overview readable from across the room: current
+  temperature with today's high/low, when rain starts (or stops) with 12 hourly
+  rain-chance bars, the next high or low tide with today's tide curve, and a
+  good-surf or super-low-tide band when one applies. Each band has a large
+  pictogram (umbrella, tide arrow, waves) so it can be told apart without
+  reading its label. "Feels like" appears only when it differs by 5° or more.
+- Quiet days collapse: a dry 12 hours becomes a footer note, and with only the
+  tide to show the temperature and tide grow to fill the screen
+- Stale cached data is flagged in the footer
 - Tide predictions
-- Moon phase display
+- Moon phase on the details page
 - Sunrise and sunset times
 - Upcoming space launches
 - Conditional beach notices for good surf and upcoming daytime super-low tides
@@ -19,7 +24,7 @@ A web application that displays weather, tide, moon phase, and space launch info
 - Adaptive refresh timing for overnight hours and approaching events
 - Static SVG dashboard endpoint for screensaver integrations
 - Simple design optimized for Kindle displays
-- Scrollable surf, tide/beach, and hourly rain details with large section links
+- Surf, tide/beach, and hourly rain details on a separate `/details` page
 - Caching for API responses to reduce calls
 - OpenTelemetry tracing (OTLP exporter)
 
@@ -69,13 +74,13 @@ both conditions apply.
 
 ## Browsing forecast details
 
-Scroll down from the overview to see surf conditions, tides/beach, and rain
-details, or tap the large Overview / Surf / Tides / Rain links. These are ordinary
-HTML links and tables, designed for the original Paperwhite browser without
-JavaScript or custom swipe gestures. When a section link is used, automatic
-refresh returns to that section. Scrolling alone does not change the selected
-section; refresh returns to the last section selected by a link (the overview by
-default).
+The overview fills exactly one screen and never scrolls. Tap the time in the
+bottom-right corner ("details") to open `/details`, which has surf conditions,
+tides/beach, and rain tables with large Overview / Surf / Tides / Rain links.
+These are ordinary HTML links and tables, designed for the original Paperwhite
+browser without JavaScript or custom swipe gestures. The details page refreshes
+back to the overview after 10 minutes, so a Kindle left there returns to the
+across-the-room view. The landscape flag (`?h`) is kept on every link.
 
 Surf details show up to 12 upcoming forecast hours of offshore wave height,
 period, direction, and matching wind forecasts. Tide details show today's NOAA

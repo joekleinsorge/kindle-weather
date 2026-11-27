@@ -369,7 +369,7 @@ func TestBuildAutoRefreshURL_PreservesQuery(t *testing.T) {
 	}
 }
 
-func TestIndexTemplate_NoLaunchHasNoLaunchMarkupAndMoonUsesIconFont(t *testing.T) {
+func TestIndexTemplate_NoLaunchHasNoLaunchMarkup(t *testing.T) {
 	rendered := renderIndexTemplate(t, nil)
 
 	if strings.Contains(rendered, `id="launches"`) {
@@ -378,8 +378,8 @@ func TestIndexTemplate_NoLaunchHasNoLaunchMarkupAndMoonUsesIconFont(t *testing.T
 	if strings.Contains(rendered, "No Kennedy") {
 		t.Fatalf("expected no launch fallback text: %s", rendered)
 	}
-	if !strings.Contains(rendered, `class="wi wi-moon-full"`) {
-		t.Fatalf("expected moon icon to include weather icon base class: %s", rendered)
+	if strings.Contains(rendered, "wi-moon") {
+		t.Fatalf("expected the moon to stay off the overview: %s", rendered)
 	}
 }
 
@@ -403,7 +403,7 @@ func TestIndexTemplate_BeachStatusIsConditional(t *testing.T) {
 	}
 
 	surf := renderIndexTemplateWithBeachStatus(t, &BeachStatus{Kind: "surf", Text: "Good surf today"})
-	for _, want := range []string{`id="beach-status"`, `class="surfboard-icon"`, `viewBox="0 0 44 24"`, "Good surf today"} {
+	for _, want := range []string{`id="beach-status"`, `class="pict-line" d="M3 16`, "Good surf today"} {
 		if !strings.Contains(surf, want) {
 			t.Fatalf("expected rendered surf status to contain %q: %s", want, surf)
 		}
@@ -413,7 +413,7 @@ func TestIndexTemplate_BeachStatusIsConditional(t *testing.T) {
 	if !strings.Contains(tide, "Super low tide at 1:45 PM") {
 		t.Fatalf("expected rendered tide status: %s", tide)
 	}
-	if strings.Contains(tide, `class="surfboard-icon"`) {
+	if strings.Contains(tide, `class="pict-line" d="M3 16`) {
 		t.Fatalf("expected tide status not to use the surf icon: %s", tide)
 	}
 }
